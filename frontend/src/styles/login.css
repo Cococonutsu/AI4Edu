@@ -1,0 +1,276 @@
+/*
+ * 登录页：一本摊开的练习本。
+ * 左页是一句话和一道例题，右页是登录表单，中间用红笔竖线分开。
+ */
+.login-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+}
+
+.login-sheet {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  width: min(940px, 100%);
+  min-height: 560px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(29, 46, 39, 0.04), 0 18px 50px rgba(29, 46, 39, 0.06);
+}
+
+/* 两页之间的装订线：一条红线加一排针脚。 */
+.login-sheet::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(52.5% - 1px);
+  width: 2px;
+  background: var(--rule-soft);
+  pointer-events: none;
+}
+
+.login-cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 46px 44px 40px;
+  background-image:
+    linear-gradient(to bottom, transparent calc(var(--grid-size) - 1px), var(--grid) calc(var(--grid-size) - 1px));
+  background-size: 100% var(--grid-size);
+}
+
+.login-cover-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.login-wordmark {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.login-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.login-statement {
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 3.6vw, 42px);
+  line-height: 1.42;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.login-statement em {
+  font-style: normal;
+  color: var(--green);
+}
+
+.login-example {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--ink-soft);
+}
+
+.login-example-question {
+  color: var(--ink);
+}
+
+.login-example-answer {
+  padding-left: 18px;
+  border-left: 2px solid var(--rule-soft);
+  color: var(--ink-soft);
+}
+
+.login-example .katex {
+  font-size: 1.02em;
+}
+
+/* 右页：表单 */
+.login-form-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 54px 52px;
+}
+
+.login-heading {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.login-subheading {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 34px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field-label {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.field-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1.5px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  font-size: 16px;
+  color: var(--ink);
+  transition: border-color 0.15s ease;
+}
+
+.field-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.field-input:hover {
+  border-bottom-color: var(--ink-faint);
+}
+
+.field-input:focus {
+  outline: none;
+  border-bottom-color: var(--green);
+}
+
+.login-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.login-alert-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.login-alert-info {
+  background: var(--green-soft);
+  color: var(--green-deep);
+}
+
+.login-alert-close {
+  margin-left: auto;
+  display: inline-flex;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.login-alert-close:hover {
+  opacity: 1;
+}
+
+.login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  margin-top: 6px;
+  border-radius: var(--radius);
+  background: var(--green);
+  color: var(--paper-raised);
+  font-size: 15.5px;
+  letter-spacing: 0.04em;
+}
+
+.login-button:hover:not(:disabled) {
+  background: var(--green-deep);
+}
+
+.login-button:disabled {
+  opacity: 0.7;
+}
+
+.login-footnote {
+  margin-top: 26px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 860px) {
+  .login-page {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .login-sheet {
+    grid-template-columns: 1fr;
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .login-sheet::after {
+    display: none;
+  }
+
+  .login-cover {
+    gap: 20px;
+    padding: 34px 26px 26px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .login-statement {
+    font-size: 26px;
+  }
+
+  .login-example {
+    display: none;
+  }
+
+  .login-form-panel {
+    justify-content: flex-start;
+    padding: 30px 26px 44px;
+  }
+}

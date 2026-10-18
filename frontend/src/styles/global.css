@@ -1,0 +1,264 @@
+/*
+ * 视觉基调：方格练习纸。
+ * 纸面是淡青灰，文字是墨色，红笔只用来标位置和出错——不用于装饰。
+ * 老师的话用宋体（教科书的语气），界面和学生的话用黑体。
+ */
+:root {
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif SC",
+    "SimSun", serif;
+  --font-mono: "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* 纸 */
+  --paper: #f7f8f3;
+  --paper-raised: #fdfefb;
+  --paper-deep: #e9eee4;
+  --paper-note: #e6ede5;
+
+  /* 墨 */
+  --ink: #1d2e27;
+  --ink-soft: #4e6157;
+  --ink-faint: #83958b;
+
+  /* 红笔 */
+  --rule: #bf4530;
+  --rule-soft: rgba(191, 69, 48, 0.16);
+
+  /* 墨绿 */
+  --green: #2f5d4c;
+  --green-deep: #24493c;
+  --green-soft: #d9e6db;
+
+  --line: #d6dfd2;
+  --line-strong: #c3d0c0;
+  --danger: #b23a2b;
+  --danger-soft: #f7e7e3;
+
+  --grid: rgba(84, 118, 99, 0.055);
+  --grid-size: 26px;
+
+  --radius: 3px;
+  --sidebar-width: 268px;
+
+  --shadow-note: 0 1px 0 rgba(29, 46, 39, 0.04);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100%;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--green);
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--green-soft);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.page-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+}
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.6px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ai4edu-spin 0.75s linear infinite;
+}
+
+.spinner-small {
+  width: 11px;
+  height: 11px;
+  border-width: 1.4px;
+}
+
+.spinner-large {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+.spinner-on-primary {
+  color: var(--paper-raised);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--green);
+  font-family: var(--font-serif);
+  font-size: 21px;
+  line-height: 1;
+  user-select: none;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+}
+
+.icon-button:hover {
+  background: rgba(47, 93, 76, 0.08);
+  color: var(--green);
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--green);
+  font-size: 13.5px;
+}
+
+.secondary-button:hover {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+@keyframes ai4edu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ai4edu-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

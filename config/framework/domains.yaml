@@ -1,0 +1,114 @@
+# 知识领域与子任务拆解模板。analyze_problem 先判定 domain，再按该领域的模板拆解子任务。
+# stages 是通用阶段，领域模板说明每个阶段在该领域里看什么。题目简单时可以合并或省略阶段，
+# 但必须至少有一个 relate 或 solve 类子任务，extend 永远是 optional。
+
+stages:
+  understand: 理解题意：识别已知条件、隐含条件与求解目标
+  represent: 表征：把条件转化为符号、算式、方程、坐标或图形表示
+  relate: 关系建立：说明条件之间如何联系，给出依据（定理、性质、数量关系）
+  solve: 求解：依据已建立的关系计算或推导
+  verify: 检验：结果是否满足题设、取值范围、单位或实际意义
+  extend: 迁移概括：条件变化时关系如何变化及适用边界（可选）
+
+domains:
+  number_operation:
+    name: 数与运算
+    bands: [primary, junior]
+    focus:
+      understand: 数的意义（整数、分数、小数、百分数、负数）与运算对象
+      represent: 列出算式，说明每个数在题中代表什么
+      relate: 运算意义与运算律的选择依据（为什么用乘法、为什么能简便）
+      solve: 运算顺序与计算过程
+      verify: 估算、逆运算验算、结果是否合理
+    common_concept_gaps: [分数单位与整体"1"的意义, 小数位值, 运算顺序, 负数运算法则]
+
+  word_problem:
+    name: 实际问题与数量关系
+    bands: [primary, junior, senior]
+    focus:
+      understand: 题中有哪些量，哪些已知、哪些未知，单位是什么
+      represent: 用线段图、表格、算式或方程表示数量关系
+      relate: 找出等量关系或比例关系，并说明来源
+      solve: 依据等量关系求解
+      verify: 代回原题检验，结果符合实际意义（如人数为正整数）
+    common_concept_gaps: [单位"1"的确定, 行程/工程/浓度等基本数量关系, 等量关系与算式的区别]
+
+  equation_algebra:
+    name: 式、方程与不等式
+    bands: [primary, junior, senior]
+    focus:
+      understand: 未知数、方程或不等式要满足的条件
+      represent: 整式、分式、根式的规范表示；设元
+      relate: 等式/不等式性质、因式分解、配方等变形的依据
+      solve: 变形步骤的正确性与等价性
+      verify: 代入检验、增根、不等号方向、取值范围
+    common_concept_gaps: [等式性质, 移项变号, 分式方程增根, 不等式乘负数变号, 绝对值意义]
+
+  function:
+    name: 函数
+    bands: [junior, senior]
+    focus:
+      understand: 自变量、因变量、定义域与函数类型
+      represent: 解析式、表格、图象之间的对应；图象上的点满足解析式
+      relate: 参数与图象性质（增减性、对称性、交点、最值）的联系
+      solve: 由条件求参数或函数值
+      verify: 定义域、参数符号、图象位置是否与结论一致
+      extend: 参数变化对图象和结论的影响
+    common_concept_gaps: [函数概念与对应关系, 图象上点的坐标意义, 反比例函数 xy=k, 一次函数 k 与 b 的几何意义, 二次函数顶点与对称轴]
+
+  geometry:
+    name: 图形与几何
+    bands: [primary, junior, senior]
+    focus:
+      understand: 图形的已知性质与要证/要求的量；区分题设与示意图外观
+      represent: 标注相等的边角、添加辅助线、设未知量
+      relate: 全等、相似、平行、勾股、圆、面积等定理与性质的使用依据
+      solve: 推理链或计算过程
+      verify: 是否用到了全部必要条件，是否依赖了图形外观
+      extend: 一般化（如中点改为比例点）及适用条件
+    common_concept_gaps: [周长与面积的区别, 平行线性质与判定的区别, 相似对应顺序, 把示意图当证明]
+
+  function_geometry:
+    name: 函数与几何综合
+    bands: [junior, senior]
+    focus:
+      understand: 函数条件与几何条件分别有哪些
+      represent: 用坐标表示关键点；图象上的点满足解析式
+      relate: 几何关系（平行、相似、中点）如何转化为线段比和坐标；坐标如何转化为线段长、底与高
+      solve: 建立关于参数的方程并求解
+      verify: 参数符号、点的位置（象限）是否符合题设
+      extend: 条件变化（比例点、不同函数）下关系的变化与边界
+    common_concept_gaps: [坐标与线段长的转化（符号与绝对值）, 同一竖直线上点的横坐标相同, 相似比与坐标比]
+
+  statistics_probability:
+    name: 统计与概率
+    bands: [primary, junior, senior]
+    focus:
+      understand: 数据来源、统计量或随机事件是什么
+      represent: 表格、统计图、树状图或列表枚举
+      relate: 统计量的意义与选择依据；事件之间的关系（互斥、独立）
+      solve: 计算统计量或概率
+      verify: 概率在 0 到 1 之间、总和为 1、结果与直觉是否一致
+    common_concept_gaps: [平均数中位数众数的意义, 等可能性前提, 放回与不放回]
+
+  sequence_calculus:
+    name: 数列、导数与高中综合
+    bands: [senior]
+    focus:
+      understand: 数列/函数的类型与所求
+      represent: 通项、递推式、导函数
+      relate: 递推关系、导数与单调性/极值的联系
+      solve: 求通项、求和、求极值或证明不等式
+      verify: 首项与边界情况、定义域、分类讨论是否完整
+      extend: 一般化与边界条件
+    common_concept_gaps: [等差等比的判定, 导数为零与极值的关系, 分类讨论遗漏]
+
+  general:
+    name: 其他
+    bands: [primary, junior, senior]
+    focus:
+      understand: 已知、所求与限制条件
+      represent: 合适的数学表示
+      relate: 条件之间的关系及依据
+      solve: 求解
+      verify: 检验

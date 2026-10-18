@@ -1,0 +1,7 @@
+# 规则引擎阈值。由 tutoring/policy.py 读取。
+stuck_turns_to_escalate: 2       # 连续多少个无进展回合后支持等级 +1
+help_request_escalates: true     # 学生明确求助时支持等级 +1
+max_support_level: L3            # v1 上限，不给完整解答
+initial_support_level: L1        # 子任务开始时允许的最高支持等级
+diagnosis_retry_limit: 2         # 回合守卫：模型未先诊断就输出正文时的重试次数
+answer_probe_limit: 2            # 同一道题中"只报答案求对错"超过这个次数后婉拒逐个确认

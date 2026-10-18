@@ -1,0 +1,88 @@
+# 诊断框架核心定义。改动后提升 version，evidence_records 和 problems 会记录所用版本。
+version: "2026.10.18-2"
+
+solo_levels:
+  S0:
+    name: 前结构
+    criterion: 在当前子任务中对相关概念、表示或条件存在语义明确的误解，且未形成支持目标的相关组织；不能因任一局部错误直接判定。
+  S1:
+    name: 单点结构
+    criterion: 识别或使用一个相关要素，尚未联系其他必要条件。
+  S2:
+    name: 多点结构
+    criterion: 呈现多个要素或局部关系，但未连成支持当前子任务结论的推理链。
+  S3:
+    name: 关联结构
+    criterion: 围绕当前子任务整合必要的表示与关系，解释关键依据，形成支持该子任务结论的整体。
+  S4:
+    name: 拓展抽象
+    criterion: 超越当前具体情境，概括关系，解释一般表达的适用条件或条件变化的影响；仅复述推广式不算。
+  SU:
+    name: 信息不足
+    criterion: 仅给选项、数值或含混表述，现有证据不足以判断知识组织结构；不属于 SOLO 层次。
+
+support_levels:
+  L0: 未接受针对当前判断内容的帮助时的独立表达
+  L1: 仅澄清表述或问题指向，未增加要素、关系或结论
+  L2: 指出遗漏条件、提供方向性提示或拆分步骤
+  L3: 给出一个局部关系的解释或示范（不给完整解答）
+  L4: 教师介入（v1 未启用）
+
+gap_types:
+  concept:
+    name: 概念意义误解
+    action: clarify_concept
+  element:
+    name: 必要要素缺失
+    action: supplement_element
+  relation:
+    name: 关系缺失
+    action: build_relation
+  justification:
+    name: 依据缺失
+    action: build_relation
+  verification:
+    name: 检验或条件辨析缺失
+    action: verify_reflect
+  generalization:
+    name: 概括或适用边界缺失
+    action: transfer_boundary
+    extension_only: true
+
+actions:
+  correct_error:
+    name: 检验修正
+    guidance: 引导学生自己检查出错的那一步（指出要检查的位置，不直接给出正确结果）。
+  confirm_complete:
+    name: 确认完成
+    guidance: 简短肯定学生已建立的关系，说明本步完成，自然过渡到下一个子任务。
+  elicit_evidence:
+    name: 澄清取证
+    guidance: 请学生说明支持其答案的依据；只在当前子任务需要解释时追问。
+  clarify_concept:
+    name: 概念澄清
+    guidance: 用一个问题让学生重新审视概念的意义，可借助具体例子。
+  supplement_element:
+    name: 要素补充
+    guidance: 引导学生注意尚未使用的已知条件或要素。
+  build_relation:
+    name: 关系建构
+    guidance: 引导学生说明两个已有要素之间如何联系，或某个结论的依据。
+  verify_reflect:
+    name: 检验反思
+    guidance: 引导学生检验结果是否满足题设条件或取值范围。
+  transfer_boundary:
+    name: 迁移检视
+    guidance: 改变一个条件，问学生关系如何变化以及适用条件。
+  offer_extension:
+    name: 提供可选拓展
+    guidance: 确认整题完成，简要总结关键关系，询问学生是否愿意尝试一个变式（可以拒绝）。
+  ask_reasoning:
+    name: 询问依据
+    guidance: 学生只报了答案。不要说对也不要说错，用一句友好的话请学生说说是怎么得到这个答案的（例如"你是怎么算出来的？说说你的思路"）。
+  decline_probe:
+    name: 婉拒逐个确认
+    guidance: 学生反复只报答案。温和说明你不会一个个帮他确认答案，因为自己把理由说出来才真正有用；然后邀请他回到当前这一步，给出当前子任务的问题。不判断对错，不加提示。
+  answer_general:
+    name: 一般答疑
+    guidance: 回答概念性问题时同样以引导为主；如果学生发来新题，先调用 analyze_problem。
