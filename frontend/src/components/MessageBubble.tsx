@@ -1,45 +1,34 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { FigureSpec } from '../api/types';
 import type { DisplayMessage, ToolDisplayStatus } from '../state/chat';
-import { AlertIcon, CheckIcon } from './Icons';
+import { useChat } from '../state/chat';
+import { formatElapsed, waitStage } from '../utils/waiting';
+import { AlertIcon, CheckIcon, ShapeIcon } from './Icons';
 import { ImageLightbox } from './ImageLightbox';
 import { MarkdownContent } from './MarkdownContent';
 
-function ThinkingIndicator(): JSX.Element {
-  return (
-    <div className="thinking-indicator" role="status">
-      <span className="thinking-dots" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-      <span>老师正在思考…</span>
-    </div>
-  );
-}
+/** 等待期间每隔一秒刷新一次，让"已等 N 秒"真的在走。 */
+function useElapsed(startedAt: number | undefined, active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
 
-function ToolStatusIcon({ state }: { state: ToolDisplayStatus['state'] }): JSX.Element {
-  if (state === 'running') {
-    return <span className="spinner tool-spinner" aria-hidden="true" />;
+  useEffect(() => {
+    if (!active || startedAt === undefined) {
+      return undefined;
+    }
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active, startedAt]);
+
+  if (startedAt === undefined) {
+    return 0;
   }
-  if (state === 'done') {
-    return <CheckIcon size={14} />;
-  }
-  return <AlertIcon size={14} />;
+  return Math.max(0, now - startedAt);
 }
 
-function ToolStatusBar({ status }: { status: ToolDisplayStatus }): JSX.Element {
+function Dots(): JSX.Element {
   return (
-    <div className={`tool-status tool-status-${status.state}`} role="status">
-      <ToolStatusIcon state={status.state} />
-      {/* 只展示后端给的友好 label，不展示工具名、参数或结果。 */}
-      <span className="tool-status-label">{status.label}</span>
-    </div>
-  );
-}
-
-function TypingDots(): JSX.Element {
-  return (
-    <span className="typing-dots" aria-label="老师正在回复">
+    <span className="thinking-dots" aria-hidden="true">
       <span />
       <span />
       <span />
@@ -47,16 +36,83 @@ function TypingDots(): JSX.Element {
   );
 }
 
+/**
+ * 等待状态：老师还没开口时显示。
+ *
+ * - 工具正在执行：显示工具给出的友好状态（"正在读题…"）。
+ * - 工具刚完成、还没开始写：先显示打勾的完成状态，下一条是当前阶段。
+ * - 其余时间：显示按已等时长变化的阶段文案。
+ * - 右侧始终显示已等时长，下方在等得较久时给一句学生可以顺手做的事。
+ */
+function WaitingStatus({
+  message,
+  elapsedMs,
+}: {
+  message: DisplayMessage;
+  elapsedMs: number;
+}): JSX.Element {
+  const kind = message.waitKind ?? 'idle';
+  const stage = waitStage(kind, elapsedMs);
+  const tool: ToolDisplayStatus | null = message.toolStatus ?? null;
+  const toolRunning = tool?.state === 'running';
+  const toolDone = tool?.state === 'done';
+
+  return (
+    <div className="waiting" role="status" aria-live="polite">
+      <div className="waiting-row">
+        {toolRunning ? (
+          <span className="spinner tool-spinner" aria-hidden="true" />
+        ) : toolDone ? (
+          <span className="waiting-check">
+            <CheckIcon size={14} />
+          </span>
+        ) : (
+          <Dots />
+        )}
+        <span className="waiting-label">
+          {tool !== null ? tool.label : stage.label}
+        </span>
+        <span className="waiting-elapsed">{formatElapsed(elapsedMs)}</span>
+      </div>
+
+      {toolDone && <div className="waiting-sub">{stage.label}</div>}
+
+      {stage.note !== null && !toolRunning && (
+        <p className="waiting-note">{stage.note}</p>
+      )}
+
+      <span className="waiting-bar" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** 关掉面板后，消息里留一个入口可以重新打开这一回合的图。 */
+function FigureChip({ figure }: { figure: FigureSpec }): JSX.Element {
+  const { openFigure } = useChat();
+  return (
+    <button
+      type="button"
+      className="figure-chip"
+      onClick={() => openFigure(figure)}
+      title="在右侧打开图示"
+    >
+      <ShapeIcon size={14} />
+      <span>{figure.title || '打开图示'}</span>
+    </button>
+  );
+}
+
 export function MessageBubble({ message }: { message: DisplayMessage }): JSX.Element {
   const [preview, setPreview] = useState<string | null>(null);
   const closePreview = useCallback(() => setPreview(null), []);
   const isUser = message.role === 'user';
-  const hasStatus = Boolean(message.thinking || message.toolStatus);
-  const showTyping = Boolean(message.streaming && message.text === '' && !hasStatus);
+
+  const waiting = !isUser && message.streaming === true && message.text === '';
+  const elapsedMs = useElapsed(message.waitStartedAt, waiting);
+
   const emptyAssistant = !isUser
     && message.text === ''
     && !message.streaming
-    && !hasStatus
     && !message.notice
     && message.attachments.length === 0;
 
@@ -98,9 +154,11 @@ export function MessageBubble({ message }: { message: DisplayMessage }): JSX.Ele
             : <MarkdownContent>{message.text}</MarkdownContent>
         )}
 
-        {message.thinking && <ThinkingIndicator />}
-        {message.toolStatus && <ToolStatusBar status={message.toolStatus} />}
-        {showTyping && <TypingDots />}
+        {!isUser && (message.figures ?? []).map((figure, index) => (
+          <FigureChip key={`${figure.title}-${index}`} figure={figure} />
+        ))}
+
+        {waiting && <WaitingStatus message={message} elapsedMs={elapsedMs} />}
 
         {message.notice && (
           <p className="message-notice" role="status">

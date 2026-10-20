@@ -49,8 +49,9 @@ class Settings(BaseSettings):
 
     llm_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     llm_api_key: str = ""
+    # 模型厂商：api/client.make_provider 按此选择 Provider。
+    llm_provider: str = "glm"
     llm_model_tutor: str = "glm-5.3-flash"
-    llm_model_analyzer: str = "glm-5.3-flash"
 
     data_dir: Path = REPO_ROOT / "data"
     config_dir: Path = REPO_ROOT / "config"

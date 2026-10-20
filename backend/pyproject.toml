@@ -15,7 +15,6 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings",
     "openai",
-    "sympy",
     "argon2-cffi",
     "pyyaml",
     "python-multipart",

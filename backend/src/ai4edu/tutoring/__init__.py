@@ -1,7 +1,8 @@
 """辅导领域核心（纯逻辑）。
 
-只依赖 pydantic、pyyaml 与标准库；不调用模型、不访问网络或数据库。
-调用方传入 `config_dir`，本包不读取全局设置。
+只依赖 pydantic、pyyaml 与标准库；不调用模型、不访问网络或数据库、
+不产出提示词文字（提示词组装在 `prompts/`）。调用方传入 `config_dir`，
+本包不读取全局设置。
 """
 
 from __future__ import annotations
@@ -19,10 +20,7 @@ from .framework import (
     PolicyConfig,
     SoloLevelDef,
     TutoringConfig,
-    domain_ids,
-    domain_templates_text,
     load_config,
-    render_template,
 )
 from .policy import (
     PolicyError,
@@ -32,16 +30,10 @@ from .policy import (
 )
 from .problem import (
     Answer,
-    Check,
     ProblemModel,
     Relation,
     Subtask,
     relation_order,
-)
-from .prompt_builder import (
-    build_analyzer_prompt,
-    build_solver_check_prompt,
-    build_tutor_system_prompt,
 )
 from .state import (
     MathStatus,
@@ -59,7 +51,6 @@ from .state import (
 __all__ = [
     "ActionDef",
     "Answer",
-    "Check",
     "ConfigError",
     "Decision",
     "Diagnosis",
@@ -84,17 +75,11 @@ __all__ = [
     "SupportLevel",
     "TutorState",
     "TutoringConfig",
-    "build_analyzer_prompt",
-    "build_solver_check_prompt",
-    "build_tutor_system_prompt",
     "decide",
-    "domain_ids",
-    "domain_templates_text",
     "general_decision",
     "load_config",
     "raise_support",
     "relation_order",
-    "render_template",
     "solo_rank",
     "start_problem",
     "support_rank",

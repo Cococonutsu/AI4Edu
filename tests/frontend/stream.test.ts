@@ -50,7 +50,7 @@ describe('NdjsonDecoder', () => {
       '{"type":"thinking","active":true}',
       '',
       '{"type":"text_delta","text":"先想一想"}',
-      '{"type":"tool_status","tool":"check_math","label":"正在核对计算…","state":"running"}',
+      '{"type":"tool_status","tool":"analyze_problem","label":"正在读题…","state":"running"}',
       '',
     ].join('\n'));
 
@@ -61,8 +61,8 @@ describe('NdjsonDecoder', () => {
       { type: 'text_delta', text: '先想一想' },
       {
         type: 'tool_status',
-        tool: 'check_math',
-        label: '正在核对计算…',
+        tool: 'analyze_problem',
+        label: '正在读题…',
         state: 'running',
       },
     ]);

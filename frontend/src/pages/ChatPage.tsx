@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { useChat } from '../state/chat';
-import { AlertIcon, CloseIcon, MenuIcon } from '../components/Icons';
+import { AlertIcon, CloseIcon, MenuIcon, SidebarIcon } from '../components/Icons';
 import { Composer } from '../components/Composer';
 import { ConversationSidebar } from '../components/ConversationSidebar';
+import { FigurePanel } from '../components/FigurePanel';
 import { MessageList } from '../components/MessageList';
 
 export function ChatPage(): JSX.Element {
@@ -18,9 +19,21 @@ export function ChatPage(): JSX.Element {
     activateConversation,
     error,
     clearError,
+    figure,
+    figureOpen,
+    closeFigure,
+    toggleFigure,
   } = useChat();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // 桌面端收起对话列表，记在本机，刷新后保持。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => window.localStorage.getItem('ai4edu.sidebarCollapsed') === '1',
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem('ai4edu.sidebarCollapsed', sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!invalidId) {
@@ -38,7 +51,11 @@ export function ChatPage(): JSX.Element {
 
   return (
     <div className="chat-shell">
-      <ConversationSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <ConversationSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+      />
 
       {sidebarOpen && (
         <button
@@ -58,6 +75,16 @@ export function ChatPage(): JSX.Element {
             onClick={() => setSidebarOpen(true)}
           >
             <MenuIcon size={21} />
+          </button>
+          <button
+            type="button"
+            className="icon-button sidebar-toggle"
+            aria-label={sidebarCollapsed ? '展开对话列表' : '收起对话列表'}
+            aria-pressed={!sidebarCollapsed}
+            title={sidebarCollapsed ? '展开对话列表' : '收起对话列表'}
+            onClick={() => setSidebarCollapsed((value) => !value)}
+          >
+            <SidebarIcon size={19} />
           </button>
           <h1 className="chat-title" title={title}>{title}</h1>
         </header>
@@ -80,6 +107,15 @@ export function ChatPage(): JSX.Element {
         <MessageList />
         <Composer key={activeId ?? 'new'} />
       </main>
+
+      {activeId !== null && (
+        <FigurePanel
+          spec={figure}
+          open={figureOpen}
+          onToggle={toggleFigure}
+          onClose={closeFigure}
+        />
+      )}
     </div>
   );
 }

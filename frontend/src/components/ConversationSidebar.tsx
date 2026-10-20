@@ -9,9 +9,15 @@ import { CloseIcon, LogOutIcon, PencilIcon, PlusIcon, TrashIcon } from './Icons'
 interface ConversationSidebarProps {
   open: boolean;
   onClose: () => void;
+  /** 桌面端收起（宽度为 0）；手机端仍用 open 控制抽屉。 */
+  collapsed: boolean;
 }
 
-export function ConversationSidebar({ open, onClose }: ConversationSidebarProps): JSX.Element {
+export function ConversationSidebar({
+  open,
+  onClose,
+  collapsed,
+}: ConversationSidebarProps): JSX.Element {
   const {
     conversations,
     conversationsLoading,
@@ -95,7 +101,11 @@ export function ConversationSidebar({ open, onClose }: ConversationSidebarProps)
   }
 
   return (
-    <aside className={`sidebar${open ? ' sidebar-open' : ''}`} aria-label="对话列表">
+    <aside
+      className={`sidebar${open ? ' sidebar-open' : ''}${collapsed ? ' sidebar-collapsed' : ''}`}
+      aria-label="对话列表"
+      aria-hidden={collapsed && !open ? true : undefined}
+    >
       <div className="sidebar-brand">
         <div className="brand-mark" aria-hidden="true">∑</div>
         <div className="brand-text">

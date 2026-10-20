@@ -122,3 +122,38 @@ export function CloseIcon(props: IconProps): JSX.Element {
     </Icon>
   );
 }
+
+/** 图示面板的开合。 */
+export function ShapeIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <path d="M4 20V5l8 15L20 5v15" />
+    </Icon>
+  );
+}
+
+export function PlayIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <path d="M8 5.5 18 12 8 18.5Z" />
+    </Icon>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </Icon>
+  );
+}
+
+/** 侧栏开合：一个带竖线的方框。 */
+export function SidebarIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="5" width="17" height="14" rx="1.5" />
+      <path d="M9.5 5v14" />
+    </Icon>
+  );
+}

@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from ai4edu.storage.repos import evidence
 from ai4edu.tools.base import BaseTool, ToolContext, ToolResult
 from ai4edu.tutoring.diagnosis import Diagnosis, validate_against
 from ai4edu.tutoring.policy import PolicyError, decide
@@ -137,9 +136,7 @@ class RecordDiagnosisTool(BaseTool):
                 status_label="诊断失败",
             )
 
-        await evidence.add(
-            ctx.db,
-            conversation_id=ctx.conversation_id,
+        await ctx.store.add_evidence(
             problem_id=ctx.state.problem_id,
             subtask_id=diagnosis.subtask_id,
             message_id=ctx.user_message_id,
@@ -150,7 +147,7 @@ class RecordDiagnosisTool(BaseTool):
             gaps_json=[gap.model_dump(mode="json") for gap in diagnosis.gaps],
             decision_json=decision.model_dump(mode="json"),
         )
-        await ctx.db.commit()
+        await ctx.store.commit()
         await ctx.persist_state(new_state)
 
         return ToolResult(

@@ -7,12 +7,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from openai import AsyncOpenAI
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from ai4edu.api.base import Provider
 from ai4edu.config import Settings
+from ai4edu.prompts import Reminders
+from ai4edu.session.store import TurnStore
 from ai4edu.storage.models import User
-from ai4edu.storage.repos import conversations, llm_calls
 from ai4edu.tutoring.framework import TutoringConfig
 from ai4edu.tutoring.problem import ProblemModel
 from ai4edu.tutoring.state import TutorState
@@ -20,21 +19,27 @@ from ai4edu.tutoring.state import TutorState
 
 @dataclass
 class ToolResult:
-    """工具执行结果：`content` 给模型看，`status_label` 给学生看。"""
+    """工具执行结果：`content` 给模型看，`status_label` 给学生看。
+
+    `display` 是**允许下发**给浏览器的结构化展示数据（目前只有 `draw_figure`
+    的图），不是工具参数或结果：它由本工具自己生成并挑选，学生端据此渲染。
+    """
 
     content: str
     is_error: bool = False
     status_label: str = ""
+    display: dict[str, Any] | None = None
 
 
 @dataclass
 class ToolContext:
     """一次学生回合内所有工具共享的上下文。"""
 
-    db: AsyncSession
+    store: TurnStore
     settings: Settings
     config: TutoringConfig
-    client: AsyncOpenAI
+    reminders: Reminders
+    provider: Provider
     user: User
     conversation_id: int
     turn_id: str
@@ -44,8 +49,6 @@ class ToolContext:
     state: TutorState = field(default_factory=lambda: TutorState.idle())
     problem: ProblemModel | None = None
 
-    # 工具确认发送、但还没有被模型正文替代的回复（见 answer_directly）。
-    pending_reply: str | None = None
     last_assistant_message_id: int | None = None
     _db_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
@@ -58,56 +61,31 @@ class ToolContext:
         input_tokens: int | None = None,
         output_tokens: int | None = None,
         latency_ms: int | None = None,
+        step: int | None = None,
+        thinking: str | None = None,
         error: str | None = None,
     ) -> None:
-        # 题目分析与独立复核并行调用模型，二者共用一个数据库会话；写库需串行。
+        # 同一回合内可能有并发的模型调用共用一个数据库会话；写库需串行。
         async with self._db_lock:
-            await self._log_llm_call_locked(
+            await self.store.log_llm_call(
                 purpose=purpose,
                 model=model,
                 prompt_version=prompt_version,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
+                step=step,
+                thinking=thinking,
                 error=error,
             )
-
-    async def _log_llm_call_locked(
-        self,
-        *,
-        purpose: str,
-        model: str,
-        prompt_version: str | None,
-        input_tokens: int | None,
-        output_tokens: int | None,
-        latency_ms: int | None,
-        error: str | None,
-    ) -> None:
-        await llm_calls.add(
-            self.db,
-            conversation_id=self.conversation_id,
-            purpose=purpose,
-            model=model,
-            prompt_version=prompt_version,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-            error=error,
-        )
-        await self.db.commit()
+            await self.store.commit()
 
     async def persist_state(self, state: TutorState) -> None:
         """工具修改状态后立即写库，下一步系统提示词就能看到新状态。"""
 
         self.state = state
-        await conversations.update_state(
-            self.db,
-            self.conversation_id,
-            self.user.id,
-            state.phase.value,
-            state.to_json(),
-        )
-        await self.db.commit()
+        await self.store.update_state(state.phase.value, state.to_json())
+        await self.store.commit()
 
 
 class BaseTool(ABC):
@@ -121,13 +99,3 @@ class BaseTool(ABC):
     @abstractmethod
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:
         """执行工具。参数不合法时返回 `is_error=True`，不要抛异常。"""
-
-    def to_openai_tool(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.input_schema,
-            },
-        }

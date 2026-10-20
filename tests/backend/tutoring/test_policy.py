@@ -45,7 +45,6 @@ PROBLEM = {
         {"id": "T5", "stage": "extend", "title": "条件变化", "goal": "一般化",
          "required_relations": ["R7"], "completion_criteria": "给出一般式", "optional": True},
     ],
-    "checks": [],
     "reference_solution": "……",
 }
 

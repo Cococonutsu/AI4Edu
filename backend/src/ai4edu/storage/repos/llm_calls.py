@@ -20,6 +20,8 @@ async def add(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     latency_ms: int | None = None,
+    step: int | None = None,
+    thinking: str | None = None,
     error: str | None = None,
 ) -> LLMCall:
     call = LLMCall(
@@ -30,6 +32,8 @@ async def add(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         latency_ms=latency_ms,
+        step=step,
+        thinking=thinking,
         error=error,
     )
     session.add(call)

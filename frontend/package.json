@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "jsxgraph": "1.14.0",
     "katex": "^0.16.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -2,6 +2,7 @@ import type {
   Conversation,
   ConversationDetail,
   ConversationPhase,
+  FigureSpec,
   GradeBand,
   LoginCredentials,
   Message,
@@ -126,11 +127,17 @@ function normalizeMessage(raw: unknown): Message | null {
   const attachments = attachmentsRaw
     .map(normalizeAttachment)
     .filter((item): item is MessageAttachment => item !== null);
+  // 图示由后端校验过结构，这里只保留是对象、带标题的项。
+  const figures = (Array.isArray(source.figures) ? source.figures : [])
+    .filter((item): item is FigureSpec => (
+      asRecord(item) !== null && typeof asRecord(item)?.title === 'string'
+    ));
   return {
     id: asNumber(source.id),
     role,
     text: asString(source.text),
     attachments,
+    figures,
     created_at: asString(source.created_at),
   };
 }

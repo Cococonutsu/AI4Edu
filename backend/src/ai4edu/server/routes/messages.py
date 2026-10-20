@@ -18,10 +18,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai4edu.agent.engine import TutorEngine
-from ai4edu.agent.events import AgentError, AgentEvent, TurnFinished
 from ai4edu.auth.deps import current_user
 from ai4edu.config import get_settings
+from ai4edu.core.events import AgentError, AgentEvent, TurnFinished
+from ai4edu.core.query_engine import QueryEngine
+from ai4edu.prompts import load_reminders
 from ai4edu.server.streaming import event_to_json, runs
 from ai4edu.storage.db import get_session
 from ai4edu.storage.models import User
@@ -50,10 +51,11 @@ class SendMessageRequest(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def get_engine() -> TutorEngine:
+def get_engine() -> QueryEngine:
     settings = get_settings()
     config = load_config(settings.config_dir)
-    return TutorEngine(settings=settings, config=config)
+    reminders = load_reminders(settings.config_dir)
+    return QueryEngine(settings=settings, config=config, reminders=reminders)
 
 
 async def _validate_conversation(
@@ -90,7 +92,7 @@ async def _validate_attachments(
 
 async def _produce_events(
     queue: "asyncio.Queue[AgentEvent | None]",
-    engine: TutorEngine,
+    engine: QueryEngine,
     *,
     user: User,
     conversation_id: int,
@@ -136,6 +138,9 @@ async def create_message(
 
     attachment_ids = list(dict.fromkeys(payload.attachment_ids))
     await _validate_attachments(session, conversation_id, user, attachment_ids)
+    # 校验到此结束。流式回答可能持续数分钟，期间不能让请求的数据库会话
+    # 一直占着读事务；引擎在后台任务里使用自己的会话。
+    await session.close()
 
     if runs.is_running(conversation_id):
         raise HTTPException(

@@ -5,6 +5,7 @@ const KNOWN_EVENT_TYPES = new Set([
   'text_delta',
   'thinking',
   'tool_status',
+  'display',
   'turn_finished',
   'error',
 ]);

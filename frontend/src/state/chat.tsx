@@ -14,10 +14,13 @@ import { describeError, isUnauthorized } from '../api/client';
 import { readNdjsonStream } from '../api/stream';
 import type {
   Conversation,
+  ConversationPhase,
+  FigureSpec,
   Message,
   ToolState,
   TurnStatus,
 } from '../api/types';
+import { waitKind, type WaitKind } from '../utils/waiting';
 
 export interface ToolDisplayStatus {
   label: string;
@@ -31,6 +34,14 @@ export interface DisplayMessage extends Message {
   toolStatus?: ToolDisplayStatus | null;
   /** 回合结束后的提示（已停止、出错等）。 */
   notice?: string | null;
+  /** 开始等待的时间（毫秒时间戳），用于显示已等时长与阶段文案。 */
+  waitStartedAt?: number;
+  /** 这条消息是否带图，和会话阶段一起决定等待文案。 */
+  hasImage?: boolean;
+  /** 等待文案的种类；回合开始事件到达后按真实阶段修正。 */
+  waitKind?: WaitKind;
+  /** 这一回合老师打开过的图示。 */
+  figures?: FigureSpec[];
 }
 
 interface ChatState {
@@ -46,6 +57,10 @@ interface ChatState {
   /** 当前正在接收的助手气泡 id，用来忽略上一个回合迟到的结束事件。 */
   streamTurnId: number | null;
   error: string | null;
+  /** 右侧图示面板当前展示的图；null 表示还没有打开过。 */
+  figure: FigureSpec | null;
+  /** 面板是否展开（有图时默认展开，学生可以收起）。 */
+  figureOpen: boolean;
 }
 
 type ChatAction =
@@ -74,6 +89,12 @@ type ChatAction =
       text: string;
     }
   | {
+      type: 'turn_started';
+      conversationId: number;
+      messageId: number;
+      phase: ConversationPhase | null;
+    }
+  | {
       type: 'thinking';
       conversationId: number;
       messageId: number;
@@ -98,6 +119,15 @@ type ChatAction =
       status: TurnStatus;
     }
   | { type: 'send_end'; conversationId: number; turnId: number }
+  | {
+      type: 'figure_show';
+      conversationId: number;
+      figure: FigureSpec;
+      fromHistory?: boolean;
+    }
+  | { type: 'figure_open'; conversationId: number; figure: FigureSpec | null }
+  | { type: 'figure_close' }
+  | { type: 'figure_toggle' }
   | { type: 'error'; message: string }
   | { type: 'clear_error' };
 
@@ -113,6 +143,8 @@ const initialState: ChatState = {
   sending: false,
   streamTurnId: null,
   error: null,
+  figure: null,
+  figureOpen: false,
 };
 
 let tempIdSeq = -1;
@@ -191,6 +223,8 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         messagesError: null,
         streamTurnId: null,
         error: null,
+        figure: null,
+        figureOpen: false,
       };
 
     case 'conversation_renamed':
@@ -238,6 +272,9 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         sending: false,
         streamTurnId: null,
         error: null,
+        // 切换会话时先清空图；加载完历史后再按最新的一张打开。
+        figure: null,
+        figureOpen: false,
       };
     }
 
@@ -256,12 +293,18 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
       if (state.activeId !== action.id) {
         return state;
       }
+      const messages = action.messages.map((message) => ({ ...message }));
+      const lastFigure = [...messages]
+        .reverse()
+        .flatMap((message) => message.figures ?? [])[0] ?? null;
       return {
         ...state,
-        messages: action.messages.map((message) => ({ ...message })),
+        messages,
         loadedId: action.id,
         messagesLoading: false,
         messagesError: null,
+        figure: lastFigure ?? state.figure,
+        figureOpen: lastFigure !== null ? true : state.figureOpen,
       };
 
     case 'messages_failed':
@@ -295,6 +338,18 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         messages: updateMessage(state.messages, action.messageId, (message) => ({
           ...message,
           text: message.text + action.text,
+        })),
+      };
+
+    case 'turn_started':
+      if (state.activeId !== action.conversationId) {
+        return state;
+      }
+      return {
+        ...state,
+        messages: updateMessage(state.messages, action.messageId, (message) => ({
+          ...message,
+          waitKind: waitKind(action.phase, message.hasImage === true),
         })),
       };
 
@@ -377,6 +432,42 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         )),
       };
 
+    case 'figure_show': {
+      if (state.activeId !== action.conversationId) {
+        return state;
+      }
+      const streaming = state.messages.filter((message) => message.streaming === true);
+      const target = streaming[streaming.length - 1];
+      return {
+        ...state,
+        messages: target === undefined
+          ? state.messages
+          : updateMessage(state.messages, target.id, (message) => ({
+              ...message,
+              figures: [...(message.figures ?? []), action.figure],
+            })),
+        figure: action.figure,
+        // 历史加载时只恢复图，不改动学生当前的收起状态。
+        figureOpen: action.fromHistory ? state.figureOpen : true,
+      };
+    }
+
+    case 'figure_open':
+      if (state.activeId !== action.conversationId) {
+        return state;
+      }
+      return {
+        ...state,
+        figure: action.figure ?? state.figure,
+        figureOpen: true,
+      };
+
+    case 'figure_close':
+      return { ...state, figureOpen: false };
+
+    case 'figure_toggle':
+      return { ...state, figureOpen: !state.figureOpen };
+
     case 'error':
       return { ...state, error: action.message };
 
@@ -398,6 +489,12 @@ interface ChatContextValue {
   messagesError: string | null;
   sending: boolean;
   error: string | null;
+  /** 右侧面板当前展示的图与展开状态。 */
+  figure: FigureSpec | null;
+  figureOpen: boolean;
+  openFigure: (figure: FigureSpec) => void;
+  closeFigure: () => void;
+  toggleFigure: () => void;
   activateConversation: (id: number | null) => void;
   reloadConversation: () => void;
   sendMessage: (text: string, attachmentIds: number[]) => Promise<boolean>;
@@ -535,6 +632,12 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       for await (const event of readNdjsonStream(body)) {
         switch (event.type) {
           case 'turn_started':
+            dispatch({
+              type: 'turn_started',
+              conversationId,
+              messageId: assistantId,
+              phase: event.phase ?? null,
+            });
             break;
 
           case 'text_delta':
@@ -553,6 +656,16 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
               messageId: assistantId,
               active: event.active,
             });
+            break;
+
+          case 'display':
+            if (event.kind === 'figure') {
+              dispatch({
+                type: 'figure_show',
+                conversationId,
+                figure: event.payload as unknown as FigureSpec,
+              });
+            }
             break;
 
           case 'tool_status':
@@ -690,6 +803,15 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       thinking: false,
       toolStatus: null,
       notice: null,
+      waitStartedAt: Date.now(),
+      hasImage: attachmentIds.length > 0,
+      figures: [],
+      // 回合开始事件到达前先按已有阶段给一个初值；后端告知真实阶段后再修正。
+      waitKind: waitKind(
+        stateRef.current.conversations.find((item) => item.id === conversationId)?.phase
+          ?? null,
+        attachmentIds.length > 0,
+      ),
     };
 
     dispatch({
@@ -758,6 +880,21 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
     dispatch({ type: 'clear_error' });
   }, []);
 
+  const openFigure = useCallback((figure: FigureSpec) => {
+    const id = stateRef.current.activeId;
+    if (id !== null) {
+      dispatch({ type: 'figure_open', conversationId: id, figure });
+    }
+  }, []);
+
+  const closeFigure = useCallback(() => {
+    dispatch({ type: 'figure_close' });
+  }, []);
+
+  const toggleFigure = useCallback(() => {
+    dispatch({ type: 'figure_toggle' });
+  }, []);
+
   const activeConversation = useMemo(
     () => state.conversations.find((item) => item.id === state.activeId) ?? null,
     [state.conversations, state.activeId],
@@ -774,6 +911,11 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       messagesError: state.messagesError,
       sending: state.sending,
       error: state.error,
+      figure: state.figure,
+      figureOpen: state.figureOpen,
+      openFigure,
+      closeFigure,
+      toggleFigure,
       activateConversation,
       reloadConversation,
       sendMessage,
@@ -792,6 +934,11 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       state.messagesError,
       state.sending,
       state.error,
+      state.figure,
+      state.figureOpen,
+      openFigure,
+      closeFigure,
+      toggleFigure,
       activeConversation,
       activateConversation,
       reloadConversation,

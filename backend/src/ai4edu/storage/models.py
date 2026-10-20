@@ -208,6 +208,10 @@ class LLMCall(Base):
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 回合内第几步（1 起）；旧数据中工具内部的调用（analyzer）为 NULL。
+    step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # "on" / "off"：本次调用是否开启思考（docs/architecture.md 3.2）。
+    thinking: Mapped[str | None] = mapped_column(String(8), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow

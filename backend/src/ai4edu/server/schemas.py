@@ -82,6 +82,8 @@ class VisibleMessage(BaseModel):
     role: Literal["user", "assistant"]
     text: str
     attachments: list[VisibleAttachment] = Field(default_factory=list)
+    # 该回合里 `draw_figure` 打开过的图（结构化描述，前端直接渲染）。
+    figures: list[dict] = Field(default_factory=list)
     created_at: datetime
 
 

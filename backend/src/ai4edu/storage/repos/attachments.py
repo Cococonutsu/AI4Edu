@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai4edu.storage.models import Attachment, Conversation
@@ -69,3 +69,28 @@ async def list_by_ids(
         )
     )
     return result.scalars().all()
+
+
+async def link_to_conversation(
+    session: AsyncSession,
+    attachment_ids: Sequence[int],
+    conversation_id: int,
+    user_id: int,
+) -> None:
+    """把尚未归属任何会话的附件挂到会话上。
+
+    新对话里先上传图片、后创建会话时，附件的 conversation_id 为空；不挂上的话，
+    之后的回合按会话加载附件时找不到这张图。已归属其他会话的附件不改动。
+    """
+
+    if not attachment_ids:
+        return
+    await session.execute(
+        update(Attachment)
+        .where(
+            Attachment.id.in_(attachment_ids),
+            Attachment.user_id == user_id,
+            Attachment.conversation_id.is_(None),
+        )
+        .values(conversation_id=conversation_id)
+    )

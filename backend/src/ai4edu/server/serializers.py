@@ -36,13 +36,14 @@ def visible_messages(rows: Sequence[Message]) -> list[VisibleMessage]:
         if pending is None:
             return
         text = "".join(pending["texts"])
-        if text.strip():
+        if text.strip() or pending["figures"]:
             visible.append(
                 VisibleMessage(
                     id=pending["id"],
                     role="assistant",
                     text=text,
                     attachments=[],
+                    figures=pending["figures"],
                     created_at=_utc(pending["created_at"]),
                 )
             )
@@ -92,7 +93,7 @@ def visible_messages(rows: Sequence[Message]) -> list[VisibleMessage]:
             if pending is not None and pending["turn_key"] != turn_key:
                 flush_pending()
             if pending is None:
-                pending = {"turn_key": turn_key, "texts": [], "id": row.id}
+                pending = {"turn_key": turn_key, "texts": [], "figures": [], "id": row.id}
             for block in blocks:
                 if block.get("type") == "text":
                     pending["texts"].append(str(block.get("text") or ""))
@@ -100,7 +101,23 @@ def visible_messages(rows: Sequence[Message]) -> list[VisibleMessage]:
             pending["id"] = row.id
             pending["created_at"] = row.created_at
 
-        # role == "tool" 与其他未知角色：不返回，也不打断助手回合的合并。
+        elif row.role == "tool":
+            # 工具结果里的展示数据（如 draw_figure 的图）挂到同回合的助手消息上。
+            turn_key = row.turn_id or ""
+            if pending is not None and pending["turn_key"] != turn_key:
+                flush_pending()
+            if pending is None:
+                # 残缺历史（回合从工具结果开始）：没有助手消息可挂，跳过。
+                continue
+            for block in blocks:
+                if block.get("type") == "tool_result" and isinstance(
+                    block.get("display"), dict
+                ):
+                    pending["figures"].append(block["display"])
+            pending["id"] = row.id
+            pending["created_at"] = row.created_at
+
+        # 其他未知角色：不返回，也不打断助手回合的合并。
 
     flush_pending()
     return visible

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from ai4edu.api.base import ToolSchema
 from ai4edu.tools.analyze_problem import analyze_problem
-from ai4edu.tools.answer_directly import answer_directly
 from ai4edu.tools.base import BaseTool
-from ai4edu.tools.check_math import check_math
+from ai4edu.tools.figure import draw_figure
 from ai4edu.tools.record_diagnosis import record_diagnosis
 from ai4edu.tutoring.state import Phase
 
@@ -15,31 +15,28 @@ _ALL_TOOLS: dict[str, BaseTool] = {
     tool.name: tool
     for tool in (
         analyze_problem,
-        answer_directly,
-        check_math,
+        draw_figure,
         record_diagnosis,
     )
 }
 
 _PHASE_TOOL_NAMES: dict[Phase, tuple[str, ...]] = {
-    Phase.idle: ("analyze_problem", "answer_directly", "check_math"),
+    # 点问题、核对与闲聊不需要工具：模型直接写正文就是回复。
+    Phase.idle: ("analyze_problem", "draw_figure"),
     Phase.tutoring: (
         "record_diagnosis",
-        "answer_directly",
-        "check_math",
         "analyze_problem",
+        "draw_figure",
     ),
     Phase.extension: (
         "record_diagnosis",
-        "answer_directly",
-        "check_math",
         "analyze_problem",
+        "draw_figure",
     ),
     Phase.completed: (
         "record_diagnosis",
-        "answer_directly",
         "analyze_problem",
-        "check_math",
+        "draw_figure",
     ),
 }
 
@@ -57,5 +54,12 @@ def all_tools() -> list[BaseTool]:
     return list(_ALL_TOOLS.values())
 
 
-def to_openai_tools(tools: Iterable[BaseTool]) -> list[dict]:
-    return [tool.to_openai_tool() for tool in tools]
+def to_tool_schemas(tools: Iterable[BaseTool]) -> list[ToolSchema]:
+    return [
+        ToolSchema(
+            name=tool.name,
+            description=tool.description,
+            input_schema=tool.input_schema,
+        )
+        for tool in tools
+    ]

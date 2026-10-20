@@ -56,37 +56,6 @@ class Subtask(BaseModel):
     optional: bool = False
 
 
-class Check(BaseModel):
-    """可用 SymPy 验算的校验式。
-
-    - `solve`：解 `equation = 0`，`symbol` 为未知量，`expect` 为期望值；
-    - `equal`：判断 `left` 与 `right` 是否相等。
-    """
-
-    kind: Literal["solve", "equal"]
-    equation: str | None = None
-    symbol: str | None = None
-    expect: str | None = None
-    left: str | None = None
-    right: str | None = None
-
-    @model_validator(mode="after")
-    def _check_required_fields(self) -> "Check":
-        if self.kind == "solve":
-            missing = [
-                name for name in ("equation", "symbol", "expect") if not getattr(self, name)
-            ]
-            if missing:
-                raise ValueError(
-                    f"solve 类型的 check 缺少字段：{'、'.join(missing)}"
-                )
-        else:
-            missing = [name for name in ("left", "right") if not getattr(self, name)]
-            if missing:
-                raise ValueError(f"equal 类型的 check 缺少字段：{'、'.join(missing)}")
-        return self
-
-
 class Answer(BaseModel):
     text: str
     latex: str | None = None
@@ -103,7 +72,6 @@ class ProblemModel(BaseModel):
     answer: Answer
     relations: list[Relation] = Field(default_factory=list)
     subtasks: list[Subtask] = Field(default_factory=list)
-    checks: list[Check] = Field(default_factory=list)
     reference_solution: str = ""
 
     @model_validator(mode="after")

@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ai4edu.agent.events import (
+from ai4edu.core.events import (
     AgentError,
     AgentEvent,
     TextDelta,
     ThinkingState,
+    ToolDisplay,
     ToolStatus,
     TurnFinished,
     TurnStarted,
@@ -51,11 +52,17 @@ def event_to_json(event: AgentEvent) -> dict[str, Any]:
     """字段严格对应 `docs/architecture.md` 第 8 节的 NDJSON 事件表。"""
 
     if isinstance(event, TurnStarted):
-        return {"type": "turn_started", "turn_id": event.turn_id}
+        return {
+            "type": "turn_started",
+            "turn_id": event.turn_id,
+            "phase": event.phase,
+        }
     if isinstance(event, TextDelta):
         return {"type": "text_delta", "text": event.text}
     if isinstance(event, ThinkingState):
         return {"type": "thinking", "active": event.active}
+    if isinstance(event, ToolDisplay):
+        return {"type": "display", "kind": event.kind, "payload": event.payload}
     if isinstance(event, ToolStatus):
         return {
             "type": "tool_status",
