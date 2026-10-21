@@ -3,7 +3,7 @@
 文字全部在 `sections.py` 的 Python 常量里（回合内短文字在
 `config/prompts/reminders.yaml`）。`build_system_prompt` 按固定顺序拼装
 具名段落：静态主体（身份、教学方式、意图路由、回复格式、画图与可视化、
-读题与拆题、诊断与判据）+ 动态的辅导状态摘要（每一步模型调用前重算）。
+联网查询、读题与拆题、诊断与判据）+ 动态的辅导状态摘要（每一步模型调用前重算）。
 改动任何文字时提升对应版本号并同步更新
 `tests/backend/prompts/golden/` 的金样例。
 """
@@ -19,6 +19,7 @@ from ai4edu.prompts.sections import (
     get_reply_format_section,
     get_teaching_style_section,
     get_tutor_state_section,
+    get_web_tools_section,
     render_template,
 )
 from ai4edu.tutoring.framework import (
@@ -30,7 +31,7 @@ from ai4edu.tutoring.problem import ProblemModel
 from ai4edu.tutoring.state import TutorState
 
 # 版本号随文字内容变化提升；文字搬进代码不改变内容，版本不变。
-TUTOR_SYSTEM_VERSION = "tutor-2026.10.19-9"
+TUTOR_SYSTEM_VERSION = "tutor-2026.10.21-1"
 
 
 def _grade_band_or_error(cfg: TutoringConfig, grade_band: str) -> GradeBand:
@@ -60,6 +61,7 @@ def build_system_prompt(
         get_intent_routing_section(),
         get_reply_format_section(),
         get_figure_section(),
+        get_web_tools_section(),
         get_problem_decomposition_section(
             domain_ids="、".join(domain_ids(cfg, grade_band)),
             domain_templates=domain_templates_text(cfg, grade_band),

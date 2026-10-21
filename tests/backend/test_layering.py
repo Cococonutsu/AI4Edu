@@ -1,7 +1,8 @@
 """依赖方向与职责边界的 AST 检查（根 `AGENTS.md` 硬性规则 1、10）。
 
 - `core/query_loop.py` 只依赖 `models/`、`core/events.py` 与传入的参数；
-- 只有 `api/glm.py`、`api/client.py` 可以 `import openai`；
+- 只有 `api/glm.py`、`api/deepseek.py`、`api/openai_compat.py`、`api/client.py`
+  可以 `import openai`；
 - `models/` 不导入 `ai4edu` 的其他子包；
 - 只有 `prompts/` 读取 `config/prompts/` 的模板文件；
 - 只有 `session/`、`auth/`、`server/routes/`、`cli/` 与 `storage/` 自身
@@ -65,8 +66,13 @@ def test_query_loop_depends_only_on_parameters():
         )
 
 
-def test_only_api_glm_and_client_import_openai():
-    allowed = {SRC / "api" / "glm.py", SRC / "api" / "client.py"}
+def test_only_api_provider_modules_import_openai():
+    allowed = {
+        SRC / "api" / "glm.py",
+        SRC / "api" / "deepseek.py",
+        SRC / "api" / "openai_compat.py",
+        SRC / "api" / "client.py",
+    }
     for path in _python_files():
         modules = _imports_of(path)
         offender = next(
@@ -76,7 +82,8 @@ def test_only_api_glm_and_client_import_openai():
         if offender:
             assert path in allowed, (
                 f"{path.relative_to(SRC)} 导入了 {offender}；"
-                "只有 api/glm.py 与 api/client.py 可以导入厂商 SDK"
+                "只有 api/glm.py、api/deepseek.py、api/openai_compat.py "
+                "与 api/client.py 可以导入厂商 SDK"
             )
 
 

@@ -1,4 +1,4 @@
-# prompt_version: reminders-2026.10.19-6
+# prompt_version: reminders-2026.10.21-1
 # 回合内发给模型的短文字：临时提醒、工具结果中的指令、学生可见的错误提示。
 # 由 prompts/reminders.py 读取。占位符格式 {name}（Python str.format），缺少占位符时报错。
 # 改动后提升首行的 prompt_version。
@@ -16,6 +16,13 @@ analyze_failed: "题目模型不合格：{error}。请修正后重新调用 anal
 # draw_figure 工具结果
 figure_invalid: "图形描述不合格：{error}。请修正后重新调用 draw_figure。"
 figure_shown: "图已打开，学生能看到并拖动。请只用一两句话说明该看什么、该拖哪个点或滑块，不要复述图中的数值，然后继续围绕当前子任务提问。"
+
+# 联网工具（web_search / web_fetch）的工具结果
+after_web_search: "搜索结果已经给你。只取教学需要的事实，用学生年级能听懂的话概括，不贴链接和原文，然后接回当前子任务。"
+after_web_fetch: "网页内容已经给你。只取与当前教学相关的部分用学生能懂的话概括，不要照搬原文，然后接回当前子任务。"
+web_search_failed: "联网搜索没有成功（{error}）。不要编造网上的信息：简单告诉学生这次没查到，再基于课本知识继续辅导。"
+web_fetch_failed: "网页抓取没有成功（{error}）。可以换更具体的关键词重新 web_search，或基于已有信息继续辅导。"
+web_tools_unavailable: "联网功能当前没有开通。简单告诉学生暂时查不了网，然后基于课本知识继续辅导。"
 
 # 工具执行层回给模型的错误说明
 unknown_tool: "未知工具 {name}，请只使用提供的工具。"

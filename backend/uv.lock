@@ -14,6 +14,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "argon2-cffi" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "openai" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -25,7 +26,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -35,6 +35,7 @@ requires-dist = [
     { name = "aiosqlite" },
     { name = "argon2-cffi" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "openai" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings" },
@@ -46,7 +47,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]

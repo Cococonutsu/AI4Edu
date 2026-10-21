@@ -47,11 +47,18 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    llm_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    # 留空时按 llm_provider 取默认地址：glm → 智谱，deepseek → https://api.deepseek.com。
+    llm_base_url: str = ""
     llm_api_key: str = ""
-    # 模型厂商：api/client.make_provider 按此选择 Provider。
+    # 模型厂商：api/client.make_provider 按此选择 Provider（glm 或 deepseek）。
     llm_provider: str = "glm"
     llm_model_tutor: str = "glm-5.3-flash"
+
+    # DeepSeek：联网工具（web_search / web_fetch）使用；llm_provider=deepseek
+    # 且 llm_api_key 留空时，聊天供应商也用这把 key。所有 key 只从环境或
+    # backend/.env 读取，统一在 Settings 管理。
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
 
     data_dir: Path = REPO_ROOT / "data"
     config_dir: Path = REPO_ROOT / "config"

@@ -29,6 +29,7 @@ from ai4edu.api.base import (
     Usage,
 )
 from ai4edu.api.client import make_provider
+from ai4edu.api.deepseek_tools import make_web_tools
 from ai4edu.config import Settings
 from ai4edu.core.events import (
     AgentError,
@@ -49,6 +50,7 @@ from ai4edu.hooks.guard import TurnGuard
 from ai4edu.hooks.tutoring_hooks import TutoringHooks
 from ai4edu.models.content import ImageBlock, TextBlock
 from ai4edu.models.messages import Message, prepare_messages
+from ai4edu.models.web import WebTools
 from ai4edu.prompts import Reminders
 from ai4edu.prompts.builder import TUTOR_SYSTEM_VERSION, build_system_prompt
 from ai4edu.prompts.reminders import Reminders
@@ -200,6 +202,7 @@ class QueryEngine:
         config: TutoringConfig,
         reminders: Reminders,
         provider: Provider | None = None,
+        web: WebTools | None = None,
         max_steps: int = 8,
         session_factory: SessionFactory | None = None,
     ) -> None:
@@ -207,6 +210,7 @@ class QueryEngine:
         self._config = config
         self._reminders = reminders
         self._provider = provider or make_provider(settings)
+        self._web = web if web is not None else make_web_tools(settings)
         self._max_steps = max_steps
         # 测试可注入临时数据库的会话工厂；生产环境使用进程级工厂。
         self._session_factory = session_factory or async_session
@@ -317,6 +321,7 @@ class QueryEngine:
             user_message_id=rows[0].db_id,
             state=state,
             problem=problem,
+            web=self._web,
         )
         guard = TurnGuard(
             self._config.policy.empty_step_retry_limit,

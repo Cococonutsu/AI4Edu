@@ -29,6 +29,7 @@ from ai4edu.core.events import (
     ModelUsage,
     ToolUseReady,
 )
+from ai4edu.models.web import WebFetchPage, WebSearchHit, WebToolsError
 
 
 def _as_parts(value: list[str] | str | None) -> list[str]:
@@ -286,9 +287,37 @@ def provider_error(recoverable: bool = True) -> ProviderError:
     return ProviderError("测试用模型调用失败", recoverable=recoverable)
 
 
+@dataclass
+class FakeWebTools:
+    """可编程的联网工具假件：返回固定的搜索结果/网页，或抛 `WebToolsError`。"""
+
+    hits: list[WebSearchHit] = field(default_factory=list)
+    page: WebFetchPage = field(
+        default_factory=lambda: WebFetchPage(title="", content="")
+    )
+    error: WebToolsError | None = None
+    searches: list[tuple[str, int]] = field(default_factory=list)
+    fetched: list[str] = field(default_factory=list)
+
+    async def search(
+        self, query: str, *, count: int = 5
+    ) -> list[WebSearchHit]:
+        self.searches.append((query, count))
+        if self.error is not None:
+            raise self.error
+        return list(self.hits)
+
+    async def fetch(self, url: str) -> WebFetchPage:
+        self.fetched.append(url)
+        if self.error is not None:
+            raise self.error
+        return self.page
+
+
 __all__ = [
     "FakeLLMClient",
     "FakeProvider",
     "FakeResponse",
+    "FakeWebTools",
     "provider_error",
 ]

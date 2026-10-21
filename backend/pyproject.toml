@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings",
     "openai",
+    "httpx",
     "argon2-cffi",
     "pyyaml",
     "python-multipart",
@@ -27,7 +28,6 @@ ai4edu-admin = "ai4edu.cli.admin:main"
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
 ]
 
 [tool.hatch.build.targets.wheel]

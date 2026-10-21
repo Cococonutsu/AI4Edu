@@ -10,8 +10,9 @@ import ai4edu.tools.analyze_problem as analyze_problem_module
 from ai4edu.config import Settings
 from ai4edu.core.events import AgentError, TextDelta, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
-from ai4edu.models.content import TextBlock, ToolUseBlock
+from ai4edu.models.content import TextBlock, ToolResultBlock, ToolUseBlock
 from ai4edu.models.messages import Message, validate_messages
+from ai4edu.models.web import WebSearchHit
 from ai4edu.prompts import load_reminders
 from ai4edu.storage.repos import llm_calls as llm_calls_repo
 from ai4edu.storage.repos import problems
@@ -21,7 +22,7 @@ from ai4edu.tutoring.framework import load_config
 from ai4edu.tutoring.policy import start_problem
 from ai4edu.tutoring.problem import ProblemModel
 from ai4edu.tutoring.state import Phase, TutorState
-from fakes import FakeProvider, FakeResponse
+from fakes import FakeProvider, FakeResponse, FakeWebTools
 
 pytestmark = pytest.mark.asyncio
 
@@ -64,15 +65,23 @@ def reminders():
 
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(data_dir=tmp_path / "data", config_dir=CONFIG_DIR)
+    return Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        config_dir=CONFIG_DIR,
+        deepseek_api_key="",
+    )
 
 
-def _engine(settings, config, reminders, provider, session_factory) -> QueryEngine:
+def _engine(
+    settings, config, reminders, provider, session_factory, web=None
+) -> QueryEngine:
     return QueryEngine(
         settings=settings,
         config=config,
         reminders=reminders,
         provider=provider,
+        web=web,
         session_factory=session_factory,
     )
 
@@ -92,6 +101,14 @@ async def _collect(engine: QueryEngine, user, conversation_id: int, text: str = 
 def _text_of(message: Message) -> str:
     return "".join(
         block.text for block in message.content if isinstance(block, TextBlock)
+    )
+
+
+def _tool_result_text(message: Message) -> str:
+    return "".join(
+        block.content
+        for block in message.content
+        if isinstance(block, ToolResultBlock)
     )
 
 
@@ -201,7 +218,12 @@ async def test_point_question_reply_streams_without_tools(
     )
     assert len(provider.requests) == 1
     assert visible_text == reply
-    assert provider.tool_names(0) == ["analyze_problem", "draw_figure"]
+    assert provider.tool_names(0) == [
+        "analyze_problem",
+        "draw_figure",
+        "web_search",
+        "web_fetch",
+    ]
     finished = [event for event in events if isinstance(event, TurnFinished)]
     assert finished[-1].status == "complete"
 
@@ -484,3 +506,96 @@ async def test_figure_display_is_streamed_and_kept_in_history(
         message_rows = await messages_repo.list_for_conversation(db, conversation_id, user.id)
     visible = visible_messages(message_rows)
     assert [item.figures for item in visible if item.role == "assistant"] == [[figure]]
+
+
+async def test_web_search_result_is_sent_to_the_next_model_request(
+    seed, session_factory, config, reminders, settings
+):
+    """联网搜索结果进入后续模型请求，并在本回合内可用。"""
+
+    user, conversation_id = await seed()
+    fake_web = FakeWebTools(
+        hits=[
+            WebSearchHit(
+                title="2026 年世界杯",
+                url="https://example.com/world-cup",
+                snippet="短摘要",
+                summary="2026 年世界杯的举办地信息。",
+                site_name="示例站",
+                date="2026-07-01",
+                rerank_score=2.5,
+                authority=3,
+            )
+        ]
+    )
+    provider = FakeProvider(
+        [
+            FakeResponse(
+                tool_calls=[
+                    (
+                        "call_search",
+                        "web_search",
+                        '{"query": "2026 年世界杯举办地", "count": 3}',
+                    )
+                ]
+            ),
+            FakeResponse(text=["老师查了资料，我们一起看看。"]),
+        ]
+    )
+
+    events = await _collect(
+        _engine(
+            settings,
+            config,
+            reminders,
+            provider,
+            session_factory,
+            web=fake_web,
+        ),
+        user,
+        conversation_id,
+        text="2026 年世界杯在哪里举办",
+    )
+
+    assert fake_web.searches == [("2026 年世界杯举办地", 3)]
+    assert len(provider.requests) == 2
+    result_text = _tool_result_text(provider.messages(1)[-1])
+    assert "2026 年世界杯" in result_text
+    assert "https://example.com/world-cup" in result_text
+    assert "2.5/3" in result_text
+    assert reminders.text("after_web_search") in result_text
+    assert any(isinstance(event, TextDelta) for event in events)
+
+
+async def test_web_tools_unavailable_reaches_the_model(
+    seed, session_factory, config, reminders, tmp_path
+):
+    """没有配置密钥时 web_search 返回“未开通”错误结果，模型据此继续辅导。"""
+
+    user, conversation_id = await seed()
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        config_dir=CONFIG_DIR,
+        deepseek_api_key="",
+    )
+    provider = FakeProvider(
+        [
+            FakeResponse(
+                tool_calls=[
+                    ("call_search", "web_search", '{"query": "某个事实"}')
+                ]
+            ),
+            FakeResponse(text=["老师暂时查不了网，我们先按课本知识来。"]),
+        ]
+    )
+
+    await _collect(
+        _engine(settings, config, reminders, provider, session_factory),
+        user,
+        conversation_id,
+        text="帮我查一下这个事实",
+    )
+
+    result_text = _tool_result_text(provider.messages(1)[-1])
+    assert reminders.text("web_tools_unavailable") in result_text

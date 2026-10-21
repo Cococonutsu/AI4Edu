@@ -9,6 +9,7 @@ from typing import Any
 
 from ai4edu.api.base import Provider
 from ai4edu.config import Settings
+from ai4edu.models.web import WebTools
 from ai4edu.prompts import Reminders
 from ai4edu.session.store import TurnStore
 from ai4edu.storage.models import User
@@ -33,7 +34,11 @@ class ToolResult:
 
 @dataclass
 class ToolContext:
-    """一次学生回合内所有工具共享的上下文。"""
+    """一次学生回合内所有工具共享的上下文。
+
+    `web` 是联网工具（搜索与网页抓取）的实现；没有配置时为 `None`，
+    web 工具据此返回“联网功能未开通”的错误结果。
+    """
 
     store: TurnStore
     settings: Settings
@@ -51,6 +56,7 @@ class ToolContext:
 
     last_assistant_message_id: int | None = None
     _db_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    web: WebTools | None = None
 
     async def log_llm_call(
         self,
