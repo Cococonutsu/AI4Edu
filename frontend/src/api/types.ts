@@ -22,6 +22,8 @@ export interface Conversation {
   id: number;
   title: string;
   phase: ConversationPhase;
+  /** 老师是否正在后台回答这个对话（学生切走后仍在继续）。 */
+  running?: boolean;
   created_at: string;
   updated_at: string;
 }

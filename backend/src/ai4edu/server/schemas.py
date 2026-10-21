@@ -68,6 +68,8 @@ class ConversationOut(ORMModel):
     id: int
     title: str
     phase: str
+    # 这个对话是否正在后台生成回复（学生切走后仍在继续）。
+    running: bool = False
     created_at: datetime
     updated_at: datetime
 

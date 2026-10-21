@@ -100,6 +100,7 @@ function normalizeConversation(raw: unknown): Conversation {
     id: asNumber(source.id),
     title: asString(source.title, '未命名对话'),
     phase,
+    running: source.running === true,
     created_at: asString(source.created_at),
     updated_at: asString(source.updated_at),
   };

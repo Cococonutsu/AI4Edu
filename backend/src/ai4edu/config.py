@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 168
     cookie_secure: bool = False
 
+    # 一个学生同时在后台生成回复的对话数上限（切到别的对话时，原对话继续生成）。
+    max_concurrent_runs_per_user: int = 3
+
     @field_validator("data_dir", "config_dir", mode="after")
     @classmethod
     def _resolve_relative_path(cls, value: Path) -> Path:

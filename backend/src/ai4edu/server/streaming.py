@@ -18,30 +18,45 @@ from ai4edu.core.events import (
 
 
 class RunRegistry:
-    """`conversation_id → 正在运行的生成任务`。"""
+    """`conversation_id → (user_id, 正在运行的生成任务)`。
+
+    生成任务与浏览器连接解耦：学生切到别的对话、连接断开，任务照样跑完，
+    结果按步存库；只有 `/stop` 才会取消。任务结束时自动从登记表移除。
+    """
 
     def __init__(self) -> None:
-        self._runs: dict[int, asyncio.Task[Any]] = {}
+        self._runs: dict[int, tuple[int, asyncio.Task[Any]]] = {}
 
     def is_running(self, conversation_id: int) -> bool:
-        task = self._runs.get(conversation_id)
-        return task is not None and not task.done()
+        entry = self._runs.get(conversation_id)
+        return entry is not None and not entry[1].done()
 
-    def start(self, conversation_id: int, task: asyncio.Task[Any]) -> bool:
+    def running_for_user(self, user_id: int) -> set[int]:
+        """该学生当前正在生成的会话 id。"""
+
+        return {
+            conversation_id
+            for conversation_id, (owner, task) in self._runs.items()
+            if owner == user_id and not task.done()
+        }
+
+    def start(self, conversation_id: int, user_id: int, task: asyncio.Task[Any]) -> bool:
         if self.is_running(conversation_id):
             return False
-        self._runs[conversation_id] = task
+        self._runs[conversation_id] = (user_id, task)
+        task.add_done_callback(lambda done: self.finish(conversation_id, done))
         return True
 
     def finish(self, conversation_id: int, task: asyncio.Task[Any]) -> None:
-        if self._runs.get(conversation_id) is task:
+        entry = self._runs.get(conversation_id)
+        if entry is not None and entry[1] is task:
             self._runs.pop(conversation_id, None)
 
     def cancel(self, conversation_id: int) -> bool:
-        task = self._runs.get(conversation_id)
-        if task is None or task.done():
+        entry = self._runs.get(conversation_id)
+        if entry is None or entry[1].done():
             return False
-        task.cancel()
+        entry[1].cancel()
         return True
 
 

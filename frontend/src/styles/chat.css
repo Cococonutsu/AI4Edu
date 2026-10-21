@@ -1374,3 +1374,25 @@
   line-height: 1.7;
   color: var(--ink-faint);
 }
+
+/* 侧边栏：在后台继续回答的对话 */
+.conversation-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+}
+
+.conversation-running-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: ai4edu-blink 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-running-dot {
+    animation: none;
+  }
+}

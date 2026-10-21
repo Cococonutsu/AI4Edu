@@ -173,7 +173,14 @@ export function ConversationSidebar({
                   >
                     <span className="conversation-title">{conversation.title}</span>
                     <span className="conversation-time">
-                      {formatConversationTime(conversation.updated_at)}
+                      {conversation.running === true && conversation.id !== activeId ? (
+                        <span className="conversation-running">
+                          <span className="conversation-running-dot" aria-hidden="true" />
+                          老师正在回答…
+                        </span>
+                      ) : (
+                        formatConversationTime(conversation.updated_at)
+                      )}
                     </span>
                   </button>
                   <div className="conversation-actions">

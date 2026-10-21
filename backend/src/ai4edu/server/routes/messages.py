@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from contextlib import suppress
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -36,6 +35,7 @@ router = APIRouter(prefix="/conversations", tags=["messages"])
 _MAX_TEXT_LENGTH = 4000
 _MAX_ATTACHMENTS = 4
 _RUNNING_CONFLICT = "上一条消息还在回答中"
+_TOO_MANY_RUNS = "已经有 {limit} 个对话在同时回答了，等其中一个答完再发吧。"
 _GENERIC_ERROR = "出了点问题，请稍后再试。"
 
 
@@ -146,6 +146,12 @@ async def create_message(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=_RUNNING_CONFLICT
         )
+    limit = max(1, get_settings().max_concurrent_runs_per_user)
+    if len(runs.running_for_user(user.id)) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_TOO_MANY_RUNS.format(limit=limit),
+        )
 
     queue: "asyncio.Queue[AgentEvent | None]" = asyncio.Queue()
     engine = get_engine()
@@ -159,26 +165,21 @@ async def create_message(
             attachment_ids=attachment_ids,
         )
     )
-    if not runs.start(conversation_id, task):
+    if not runs.start(conversation_id, user.id, task):
         task.cancel()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=_RUNNING_CONFLICT
         )
 
+    # 浏览器断开（例如学生切到别的对话）时这个生成器被关闭，但不取消生成任务：
+    # 任务继续跑完并按步存库，结束时由登记表的回调移除。只有 /stop 会取消。
     async def event_stream() -> AsyncIterator[str]:
-        try:
-            while True:
-                event = await queue.get()
-                if event is None:
-                    break
-                line = json.dumps(event_to_json(event), ensure_ascii=False)
-                yield line + "\n"
-        finally:
-            runs.finish(conversation_id, task)
-            if not task.done():
-                task.cancel()
-            with suppress(asyncio.CancelledError, Exception):
-                await task
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            line = json.dumps(event_to_json(event), ensure_ascii=False)
+            yield line + "\n"
 
     return StreamingResponse(
         event_stream(),

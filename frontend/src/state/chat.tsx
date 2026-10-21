@@ -20,6 +20,7 @@ import type {
   ToolState,
   TurnStatus,
 } from '../api/types';
+import { pendingReplyStart } from '../utils/pendingReply';
 import { waitKind, type WaitKind } from '../utils/waiting';
 
 export interface ToolDisplayStatus {
@@ -56,6 +57,8 @@ interface ChatState {
   sending: boolean;
   /** 当前正在接收的助手气泡 id，用来忽略上一个回合迟到的结束事件。 */
   streamTurnId: number | null;
+  /** 正在后台生成、本页没有接着流的会话 id（切回来后轮询等它答完）。 */
+  backgroundRunId: number | null;
   error: string | null;
   /** 右侧图示面板当前展示的图；null 表示还没有打开过。 */
   figure: FigureSpec | null;
@@ -74,7 +77,15 @@ type ChatAction =
   | { type: 'activate'; id: number | null }
   | { type: 'suppress_load_cleared'; id: number }
   | { type: 'messages_loading'; id: number }
-  | { type: 'messages_loaded'; id: number; messages: Message[] }
+  | {
+      type: 'messages_loaded';
+      id: number;
+      messages: Message[];
+      /** 后端说这个会话还在生成。 */
+      running?: boolean;
+      /** 还在生成且最后一条是学生消息时补的等待气泡。 */
+      pending?: DisplayMessage | null;
+    }
   | { type: 'messages_failed'; id: number; message: string }
   | {
       type: 'send_start';
@@ -142,6 +153,7 @@ const initialState: ChatState = {
   messagesError: null,
   sending: false,
   streamTurnId: null,
+  backgroundRunId: null,
   error: null,
   figure: null,
   figureOpen: false,
@@ -222,6 +234,7 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         messagesLoading: false,
         messagesError: null,
         streamTurnId: null,
+        backgroundRunId: null,
         error: null,
         figure: null,
         figureOpen: false,
@@ -251,6 +264,7 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         messagesError: null,
         sending: false,
         streamTurnId: null,
+        backgroundRunId: null,
       };
     }
 
@@ -271,6 +285,7 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
         messagesError: null,
         sending: false,
         streamTurnId: null,
+        backgroundRunId: null,
         error: null,
         // 切换会话时先清空图；加载完历史后再按最新的一张打开。
         figure: null,
@@ -293,16 +308,24 @@ function reducer(state: ChatState, action: ChatAction): ChatState {
       if (state.activeId !== action.id) {
         return state;
       }
-      const messages = action.messages.map((message) => ({ ...message }));
+      const messages: DisplayMessage[] = action.messages.map((message) => ({ ...message }));
       const lastFigure = [...messages]
         .reverse()
         .flatMap((message) => message.figures ?? [])[0] ?? null;
+      // 本页正在接收流时不碰发送状态；否则按后端的 running 进入或结束"后台等待"。
+      const foreground = state.streamTurnId !== null;
+      const running = !foreground && action.running === true;
+      if (running && action.pending) {
+        messages.push(action.pending);
+      }
       return {
         ...state,
         messages,
         loadedId: action.id,
         messagesLoading: false,
         messagesError: null,
+        sending: foreground ? state.sending : running,
+        backgroundRunId: running ? action.id : null,
         figure: lastFigure ?? state.figure,
         figureOpen: lastFigure !== null ? true : state.figureOpen,
       };
@@ -505,6 +528,29 @@ interface ChatContextValue {
   clearError: () => void;
 }
 
+/** 会话还在后台生成、最后一条是学生消息时，补一个等待气泡。 */
+function pendingBubble(detail: Conversation & { messages: Message[] }): DisplayMessage | null {
+  const pending = pendingReplyStart(detail.messages, detail.running === true);
+  if (pending === null) {
+    return null;
+  }
+  return {
+    id: nextTempId(),
+    role: 'assistant',
+    text: '',
+    attachments: [],
+    created_at: new Date(pending.startedAt).toISOString(),
+    streaming: true,
+    thinking: false,
+    toolStatus: null,
+    notice: null,
+    waitStartedAt: pending.startedAt,
+    hasImage: pending.hasImage,
+    waitKind: waitKind(detail.phase, pending.hasImage),
+    figures: [],
+  };
+}
+
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }): JSX.Element {
@@ -553,7 +599,13 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
     dispatch({ type: 'messages_loading', id });
     try {
       const detail = await api.getConversation(id);
-      dispatch({ type: 'messages_loaded', id, messages: detail.messages });
+      dispatch({
+        type: 'messages_loaded',
+        id,
+        messages: detail.messages,
+        running: detail.running === true,
+        pending: pendingBubble(detail),
+      });
       dispatch({ type: 'conversation_merged', conversation: detail });
     } catch (error) {
       if (!isUnauthorized(error)) {
@@ -583,6 +635,8 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
     }
 
     if (current.sending) {
+      // 只断开本页对这条流的接收；后端会继续把回答生成完并存库，
+      // 切回来时按 running 显示等待并轮询（不调用 /stop）。
       abortRef.current?.abort();
       abortRef.current = null;
       sendingRef.current = false;
@@ -593,6 +647,44 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       void loadMessages(id);
     }
   }, [loadMessages]);
+
+  useEffect(() => {
+    const id = state.backgroundRunId;
+    if (id === null || id !== state.activeId) {
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void api.getConversation(id).then((detail) => {
+        if (cancelled || detail.running === true) {
+          return;
+        }
+        dispatch({ type: 'messages_loaded', id, messages: detail.messages, running: false });
+        dispatch({ type: 'conversation_merged', conversation: detail });
+        void refreshConversations();
+      }).catch(() => {
+        // 网络抖动：下一次再看。
+      });
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [state.backgroundRunId, state.activeId, refreshConversations]);
+
+  // 侧边栏：有别的对话在后台生成时，定期刷新列表，让"正在回答"的标记按时消失。
+  const anyBackgroundRunning = state.conversations.some(
+    (item) => item.running === true && item.id !== state.activeId,
+  );
+  useEffect(() => {
+    if (!anyBackgroundRunning) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void refreshConversations();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [anyBackgroundRunning, refreshConversations]);
 
   const reloadConversation = useCallback(() => {
     const id = stateRef.current.activeId;

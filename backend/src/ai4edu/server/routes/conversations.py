@@ -13,6 +13,7 @@ from ai4edu.server.schemas import (
     ConversationUpdate,
 )
 from ai4edu.server.serializers import visible_messages
+from ai4edu.server.streaming import runs
 from ai4edu.storage.db import get_session
 from ai4edu.storage.models import User
 from ai4edu.storage.repos import conversations, messages
@@ -37,7 +38,11 @@ async def list_conversations(
     session: AsyncSession = Depends(get_session),
 ) -> list[ConversationOut]:
     rows = await conversations.list_for_user(session, user.id)
-    return [ConversationOut.model_validate(row) for row in rows]
+    running = runs.running_for_user(user.id)
+    return [
+        ConversationOut.model_validate(row).model_copy(update={"running": row.id in running})
+        for row in rows
+    ]
 
 
 @router.post("", response_model=ConversationOut, status_code=status.HTTP_201_CREATED)
@@ -62,7 +67,7 @@ async def get_conversation(
     return ConversationDetail(
         **ConversationOut.model_validate(conversation).model_dump(),
         messages=visible_messages(rows),
-    )
+    ).model_copy(update={"running": runs.is_running(conversation.id)})
 
 
 @router.patch("/{conversation_id}", response_model=ConversationOut)
