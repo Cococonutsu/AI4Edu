@@ -27,6 +27,7 @@ interface AuthState {
 type AuthAction =
   | { type: 'restored'; user: User }
   | { type: 'signed_in'; user: User }
+  | { type: 'updated'; user: User }
   | { type: 'signed_out'; notice?: string | null }
   | { type: 'notice'; notice: string | null };
 
@@ -41,6 +42,8 @@ function reducer(state: AuthState, action: AuthAction): AuthState {
     case 'restored':
     case 'signed_in':
       return { status: 'authenticated', user: action.user, notice: null };
+    case 'updated':
+      return { ...state, user: action.user };
     case 'signed_out':
       return { status: 'anonymous', user: null, notice: action.notice ?? null };
     case 'notice':
@@ -56,6 +59,8 @@ interface AuthContextValue {
   notice: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
+  /** 用后端返回的最新资料替换当前用户。 */
+  updateUser: (user: User) => void;
   dismissNotice: () => void;
 }
 
@@ -112,6 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     dispatch({ type: 'notice', notice: null });
   }, []);
 
+  const updateUser = useCallback((user: User) => {
+    dispatch({ type: 'updated', user });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status: state.status,
@@ -119,9 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       notice: state.notice,
       login,
       logout,
+      updateUser,
       dismissNotice,
     }),
-    [state.status, state.user, state.notice, login, logout, dismissNotice],
+    [state.status, state.user, state.notice, login, logout, updateUser, dismissNotice],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

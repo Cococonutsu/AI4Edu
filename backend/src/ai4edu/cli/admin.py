@@ -17,21 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai4edu.auth.passwords import hash_password
 from ai4edu.storage.db import async_session, init_db
 from ai4edu.storage.repos import users
+from ai4edu.tutoring.framework import grade_band_for
 
 
 class AdminError(Exception):
     """面向管理员的可读错误。"""
-
-
-def grade_band_for(grade: int) -> str:
-    """按年级推出学段：1–6 小学，7–9 初中，10–12 高中。"""
-    if 1 <= grade <= 6:
-        return "primary"
-    if 7 <= grade <= 9:
-        return "junior"
-    if 10 <= grade <= 12:
-        return "senior"
-    raise AdminError("年级必须在 1–12 之间")
 
 
 async def _create_user(session: AsyncSession, args: argparse.Namespace) -> None:
@@ -42,12 +32,17 @@ async def _create_user(session: AsyncSession, args: argparse.Namespace) -> None:
         raise AdminError(f"用户名 {username} 已存在")
     if not args.password:
         raise AdminError("密码不能为空")
+    try:
+        grade_band = grade_band_for(args.grade)
+    except ValueError as exc:
+        # 学段推导在 `tutoring/` 里是纯函数；命令行仍用 AdminError 报告。
+        raise AdminError(str(exc)) from exc
     user = await users.create(
         session,
         username=username,
         password_hash=hash_password(args.password),
         display_name=(args.display_name or username).strip() or username,
-        grade_band=grade_band_for(args.grade),
+        grade_band=grade_band,
         grade=args.grade,
         role=args.role,
     )

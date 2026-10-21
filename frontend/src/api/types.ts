@@ -13,6 +13,12 @@ export interface User {
   role: UserRole;
 }
 
+/** 修改个人设置时允许提交的字段，至少包含一个。 */
+export interface UpdateMePayload {
+  display_name?: string;
+  grade?: number;
+}
+
 export interface LoginCredentials {
   username: string;
   password: string;

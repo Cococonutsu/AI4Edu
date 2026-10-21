@@ -7,6 +7,7 @@ import type {
   LoginCredentials,
   Message,
   MessageAttachment,
+  UpdateMePayload,
   UploadedAttachment,
   User,
   UserRole,
@@ -265,6 +266,11 @@ export async function login(credentials: LoginCredentials): Promise<User> {
 
 export async function logout(): Promise<void> {
   await request<void>('/auth/logout', { method: 'POST', skipAuthRedirect: true });
+}
+
+export async function updateMe(payload: UpdateMePayload): Promise<User> {
+  const raw = await jsonRequest<unknown>('/auth/me', 'PATCH', payload);
+  return normalizeUser(raw);
 }
 
 /* ---------------------------- 会话 ---------------------------- */

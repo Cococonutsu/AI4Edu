@@ -40,6 +40,25 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UpdateMeRequest(BaseModel):
+    """`PATCH /auth/me` 的请求体：只允许改名字和年级，其他字段一律拒绝。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = None
+    grade: int | None = None
+
+    @field_validator("grade", mode="before")
+    @classmethod
+    def _grade_must_be_integer(cls, value: object) -> object:
+        # 在类型转换前拦下 "九"、true、8.5 等值，错误信息保持中文。
+        if value is not None and (
+            not isinstance(value, int) or isinstance(value, bool)
+        ):
+            raise ValueError("年级必须是 1–12 的整数")
+        return value
+
+
 class ConversationCreate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
 

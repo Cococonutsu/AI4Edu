@@ -16,6 +16,24 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 # 领域模板只允许出现在这三个学段。
 GRADE_BAND_NAMES: tuple[str, ...] = ("primary", "junior", "senior")
 
+
+def grade_band_for(grade: int) -> str:
+    """按年级返回学段名称：1–6 为小学（primary），7–9 为初中（junior），
+    10–12 为高中（senior）。
+
+    非整数或不在 1–12 范围内时抛出 `ValueError`。
+    """
+    if not isinstance(grade, int) or isinstance(grade, bool):
+        raise ValueError("年级必须在 1–12 之间")
+    if 1 <= grade <= 6:
+        return "primary"
+    if 7 <= grade <= 9:
+        return "junior"
+    if 10 <= grade <= 12:
+        return "senior"
+    raise ValueError("年级必须在 1–12 之间")
+
+
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
