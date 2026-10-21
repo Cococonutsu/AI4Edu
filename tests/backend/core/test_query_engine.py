@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -12,12 +13,12 @@ from ai4edu.core.events import AgentError, TextDelta, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
 from ai4edu.models.content import TextBlock, ToolResultBlock, ToolUseBlock
 from ai4edu.models.messages import Message, validate_messages
-from ai4edu.models.web import WebSearchHit
 from ai4edu.prompts import load_reminders
 from ai4edu.storage.repos import llm_calls as llm_calls_repo
 from ai4edu.storage.repos import problems
 from ai4edu.tools.base import ToolResult
 from ai4edu.tools.record_diagnosis import record_diagnosis
+from ai4edu.tools.web.client import WebSearchHit
 from ai4edu.tutoring.framework import load_config
 from ai4edu.tutoring.policy import start_problem
 from ai4edu.tutoring.problem import ProblemModel
@@ -599,3 +600,27 @@ async def test_web_tools_unavailable_reaches_the_model(
 
     result_text = _tool_result_text(provider.messages(1)[-1])
     assert reminders.text("web_tools_unavailable") in result_text
+
+
+async def test_missing_api_key_logged_when_engine_is_built(
+    tmp_path, config, reminders, caplog
+):
+    """回归 #12：没配置密钥时在引擎构建处说清楚，而不是发消息时才 500。"""
+
+    caplog.set_level(logging.ERROR, logger="ai4edu")
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        config_dir=CONFIG_DIR,
+        llm_api_key="",
+        deepseek_api_key="",
+    )
+
+    QueryEngine(
+        settings=settings,
+        config=config,
+        reminders=reminders,
+        provider=FakeProvider([]),
+    )
+
+    assert "未配置 LLM_API_KEY" in caplog.text

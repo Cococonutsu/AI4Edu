@@ -1,37 +1,10 @@
-"""模型调用层：Provider 协议、智谱实现、按配置的工厂、JSON 提取。
+"""模型调用层：按配置创建 Provider（厂商实现见 glm.py、deepseek.py）。
 
-只有本包可以导入厂商 SDK（`openai`）；不了解辅导业务。
+只有本包可以导入厂商 SDK（`openai`）；不了解辅导业务。联网工具的厂商
+HTTP（httpx）在 `tools/web_client.py`。请求/响应、事件与 Provider 协议的
+契约类型在 `ai4edu.models.contracts`。
 """
 
-from ai4edu.api.base import (
-    ImageLoader,
-    ModelRequest,
-    ModelResponse,
-    Provider,
-    ProviderError,
-    ThinkingMode,
-    ToolChoice,
-    ToolSchema,
-    ToolUse,
-    Usage,
-)
 from ai4edu.api.client import make_client, make_provider
-from ai4edu.api.json_util import JsonParseError, complete_json, extract_json_object
 
-__all__ = [
-    "ImageLoader",
-    "JsonParseError",
-    "ModelRequest",
-    "ModelResponse",
-    "Provider",
-    "ProviderError",
-    "ThinkingMode",
-    "ToolChoice",
-    "ToolSchema",
-    "ToolUse",
-    "Usage",
-    "complete_json",
-    "extract_json_object",
-    "make_client",
-    "make_provider",
-]
+__all__ = ["make_client", "make_provider"]

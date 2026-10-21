@@ -3,6 +3,8 @@
 文字在 `config/prompts/reminders.yaml`（带版本号），由 `load_reminders`
 读取；占位符格式 `{name}`（Python str.format），模板里出现而调用没给的
 占位符会抛 `ConfigError`，而不是留空。
+
+对应 `docs/architecture.md` 第 2.1 节（提示词唯一出口）。
 """
 
 from __future__ import annotations

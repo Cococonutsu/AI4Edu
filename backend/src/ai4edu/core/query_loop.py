@@ -21,21 +21,21 @@ from typing import Any, Literal, Protocol, TypeAlias
 
 from ai4edu.core.events import (
     AgentEvent,
-    ModelEvent,
-    ModelStreamEnd,
-    ModelTextDelta,
-    ModelThinkingDelta,
     TextDelta,
     ThinkingState,
     ToolDisplay,
     ToolStatus,
-    ToolUseReady,
 )
 from ai4edu.models.contracts import (
+    ModelEvent,
+    ModelStreamEnd,
+    ModelTextDelta,
+    ModelThinkingDelta,
     ProviderError,
     ThinkingMode,
     ToolChoice,
     ToolSchema,
+    ToolUseReady,
 )
 from ai4edu.models.content import (
     TextBlock,

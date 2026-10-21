@@ -250,12 +250,16 @@ def _pair_tool_results(
                                 ToolResultBlock(
                                     tool_use_id=tool_use_id,
                                     content=MISSING_TOOL_RESULT,
+                                    # 结果缺失说明执行被中断：按错误结果补，
+                                    # 模型能从 is_error 看出这不是正常返回。
+                                    is_error=True,
+                                    status_label="未执行",
                                 )
                             ],
                             turn_id=message.turn_id,
                         )
                     )
-                    _record_fix(fixes, f"为工具调用 {tool_use_id} 补了结果")
+                    _record_fix(fixes, f"为工具调用 {tool_use_id} 补了错误结果")
 
             index = cursor
             continue

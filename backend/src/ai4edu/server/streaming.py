@@ -1,4 +1,4 @@
-"""智能体事件 → NDJSON；以及同一会话的运行任务登记与取消。"""
+"""智能体事件 → NDJSON；以及同一会话的运行任务登记与取消。对应 `docs/architecture.md` 第 8 节（NDJSON 事件与后台生成）。"""
 
 from __future__ import annotations
 

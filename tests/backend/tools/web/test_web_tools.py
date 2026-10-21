@@ -7,17 +7,17 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai4edu.models.web import WebFetchPage, WebSearchHit, WebToolsError
 from ai4edu.prompts import load_reminders
-from ai4edu.tools.registry import tools_for
-from ai4edu.tools.web_fetch import web_fetch
-from ai4edu.tools.web_search import web_search
+from ai4edu.tools.registry import build_registry
+from ai4edu.tools.web.client import WebFetchPage, WebSearchHit, WebToolsError
+from ai4edu.tools.web.fetch import web_fetch
+from ai4edu.tools.web.search import web_search
 from ai4edu.tutoring.state import Phase
 from fakes import FakeWebTools
 
 pytestmark = pytest.mark.asyncio
 
-CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[4] / "config"
 
 
 @pytest.fixture(scope="module")
@@ -257,6 +257,6 @@ async def test_fetch_truncates_long_content(reminders):
     "phase", [Phase.idle, Phase.tutoring, Phase.extension, Phase.completed]
 )
 async def test_every_phase_offers_web_tools(phase):
-    names = [tool.name for tool in tools_for(phase)]
+    names = [tool.name for tool in build_registry().available_for(phase)]
 
     assert names[-2:] == ["web_search", "web_fetch"]

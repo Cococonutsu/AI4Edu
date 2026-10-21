@@ -16,13 +16,15 @@
 
 公共转译继承自 `OpenAICompatProvider`；DeepSeek 自己的协议差异只在本文件
 覆写，后续协议变化也只改这里。
+
+对应 `docs/architecture.md` 第 2.2 节（Provider 协议与厂商实现）。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ai4edu.api.base import ModelRequest
+from ai4edu.models.contracts import ModelRequest
 from ai4edu.api.openai_compat import OpenAICompatProvider
 
 

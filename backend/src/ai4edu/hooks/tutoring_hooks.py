@@ -5,8 +5,10 @@
 - 本回合 `analyze_problem` 成功后，后续步骤的工具列表去掉 `record_diagnosis`；
 - 本步已有正文下发且有工具调用时，下一步追加“已经对学生说过”的提醒；
 - 消息持久化（写 `messages` 表、更新 `last_assistant_message_id`）；
-- 每步的工具列表来自 `tools.registry.tools_for(phase)`（phase 每步重新
-  读取 `ctx.state`，上一步工具可能刚改过它）；
+- 每步的工具列表来自 `registry.available_for(phase, 本回合已成功的工具)`
+  （phase 每步重新读取 `ctx.state`，上一步工具可能刚改过它）；工具冲突
+  （如分析完不诊断）由工具的 `unavailable_after` 声明、注册表执行，
+  本模块不写具体工具名；
 - 按步骤决定 thinking 与 tool_choice（`docs/architecture.md` 3.2）。
 """
 
@@ -14,14 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ai4edu.api.base import ThinkingMode, ToolChoice
+from ai4edu.models.contracts import ThinkingMode, ToolChoice
 from ai4edu.core.query_loop import StepDecision, StepPlan
 from ai4edu.hooks.guard import TurnGuard
 from ai4edu.models.content import TextBlock
 from ai4edu.models.messages import Message
 from ai4edu.prompts.reminders import Reminders
 from ai4edu.tools.base import ToolContext
-from ai4edu.tools.registry import to_tool_schemas, tools_for
+from ai4edu.tools.registry import ToolRegistry, to_tool_schemas
 
 # 只写回复的步骤也保持 auto：提示词里已经要求只写回复。
 _TOOL_CHOICE: ToolChoice = "auto"
@@ -62,20 +64,22 @@ class TutoringHooks:
         ctx: ToolContext,
         guard: TurnGuard,
         reminders: Reminders,
+        registry: ToolRegistry,
     ) -> None:
         self._ctx = ctx
         self._guard = guard
         self._reminders = reminders
+        self._registry = registry
+        self._succeeded: set[str] = set()
         self._diagnosed = False
         self._analyzed = False
         self._drew_figure = False
         self._last_tool_error = False
 
     def before_step(self, step: int) -> StepPlan:
-        tools = tools_for(self._ctx.state.phase)
-        if self._analyzed:
-            # 本回合刚分析完新题：学生还没有针对子任务作答，不能诊断。
-            tools = [tool for tool in tools if tool.name != "record_diagnosis"]
+        tools = self._registry.available_for(
+            self._ctx.state.phase, succeeded=self._succeeded
+        )
         thinking, tool_choice = choose_step_mode(
             TurnFacts(
                 step=step,
@@ -104,6 +108,7 @@ class TutoringHooks:
     def after_tool(self, name: str, *, is_error: bool) -> bool:
         self._last_tool_error = is_error
         if not is_error:
+            self._succeeded.add(name)
             if name == "analyze_problem":
                 self._analyzed = True
             elif name == "draw_figure":

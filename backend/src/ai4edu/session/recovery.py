@@ -5,6 +5,8 @@
 “工具未执行（回合被中断）”，让每次模型请求拿到完整序列；数据库原文不动。
 发请求前的完整规范化与校验仍由 `models/messages.prepare_messages()` 负责，
 两边的修复是幂等的。
+
+对应 `docs/architecture.md` 第 3.1 节（消息序列修复）。
 """
 
 from __future__ import annotations

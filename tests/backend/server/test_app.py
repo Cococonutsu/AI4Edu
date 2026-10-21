@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-import logging
-
 import httpx
 import pytest
 
 import ai4edu.server.app as app_module
-from ai4edu.config import get_settings
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_missing_api_key_logged_at_startup(monkeypatch, caplog):
-    """回归：错误记录 #12 —— 没配置 backend/.env 时发消息报 500。"""
+async def test_startup_initializes_database_and_serves_health(monkeypatch):
+    """应用能启动、健康检查可用。
 
-    monkeypatch.setenv("LLM_API_KEY", "")
-    get_settings.cache_clear()
-    caplog.set_level(logging.ERROR, logger="ai4edu")
+    密钥缺失的告警在 QueryEngine 构建处发出（回归 #12 的对应测试在
+    tests/backend/core/test_query_engine.py），启动本身不因缺密钥失败。
+    """
 
     async def fake_init_db() -> None:
         return None
@@ -34,4 +31,3 @@ async def test_missing_api_key_logged_at_startup(monkeypatch, caplog):
             response = await client.get("/api/health")
 
     assert response.status_code == 200
-    assert "未配置 LLM_API_KEY" in caplog.text

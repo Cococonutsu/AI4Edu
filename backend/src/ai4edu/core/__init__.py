@@ -8,15 +8,9 @@
 from ai4edu.core.events import (
     AgentError,
     AgentEvent,
-    ModelEvent,
-    ModelStreamEnd,
-    ModelTextDelta,
-    ModelThinkingDelta,
-    ModelUsage,
     TextDelta,
     ThinkingState,
     ToolStatus,
-    ToolUseReady,
     TurnFinished,
     TurnStarted,
 )
@@ -29,6 +23,14 @@ from ai4edu.core.query_loop import (
     StepRequest,
     ToolOutcome,
     ToolRunner,
+)
+from ai4edu.models.contracts import (
+    ModelEvent,
+    ModelStreamEnd,
+    ModelTextDelta,
+    ModelThinkingDelta,
+    ModelUsage,
+    ToolUseReady,
 )
 
 # 注意：不要在包级 re-export `query_loop` 函数——它与子模块同名，

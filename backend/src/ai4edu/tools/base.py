@@ -1,4 +1,4 @@
-"""工具基类与执行上下文。"""
+"""工具基类与执行上下文。对应 `docs/architecture.md` 第 5 节（工具）。"""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from ai4edu.api.base import Provider
 from ai4edu.config import Settings
-from ai4edu.models.web import WebTools
+from ai4edu.models.contracts import Provider
+from ai4edu.models.content import ToolResultContent
 from ai4edu.prompts import Reminders
 from ai4edu.session.store import TurnStore
 from ai4edu.storage.models import User
+from ai4edu.tools.web.client import WebTools
 from ai4edu.tutoring.framework import TutoringConfig
 from ai4edu.tutoring.problem import ProblemModel
 from ai4edu.tutoring.state import TutorState
@@ -22,11 +23,13 @@ from ai4edu.tutoring.state import TutorState
 class ToolResult:
     """工具执行结果：`content` 给模型看，`status_label` 给学生看。
 
+    `content` 是 `ToolResultContent`（当前为纯文本，预留富内容块，定义见
+    `models/content.py`）；经 `ToolRunnerAdapter` 渲染成文本后进入循环。
     `display` 是**允许下发**给浏览器的结构化展示数据（目前只有 `draw_figure`
     的图），不是工具参数或结果：它由本工具自己生成并挑选，学生端据此渲染。
     """
 
-    content: str
+    content: ToolResultContent
     is_error: bool = False
     status_label: str = ""
     display: dict[str, Any] | None = None
@@ -101,7 +104,20 @@ class BaseTool(ABC):
     description: str
     input_schema: dict[str, Any]
     running_label: str = "处理中…"
+    # 本回合内，这些工具成功执行一次后本工具即不可用（可用性由
+    # `registry.available_for` 统一执行）。冲突声明写在受影响的工具上，
+    # 如 record_diagnosis 声明 unavailable_after=("analyze_problem",)。
+    unavailable_after: tuple[str, ...] = ()
 
     @abstractmethod
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:
         """执行工具。参数不合法时返回 `is_error=True`，不要抛异常。"""
+
+    def is_concurrency_safe(self, input: dict[str, Any]) -> bool:
+        """是否可与其他工具并行执行（对齐 cc 的同名声明）。
+
+        当前循环串行执行，这是给将来并行编排预留的声明：只读工具保持
+        默认 True；会修改辅导状态或数据库的工具覆写为 False，并行执行时
+        需独占。
+        """
+        return True

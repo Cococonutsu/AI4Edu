@@ -8,13 +8,12 @@ import httpx
 import openai
 import pytest
 
-from ai4edu.api.base import (
+from ai4edu.api.glm import GLMProvider
+from ai4edu.models.contracts import (
     ModelRequest,
     ProviderError,
     ToolSchema,
 )
-from ai4edu.api.glm import GLMProvider
-from ai4edu.api.json_util import JsonParseError, complete_json, extract_json_object
 from ai4edu.models.content import (
     ImageBlock,
     TextBlock,
@@ -55,7 +54,7 @@ async def test_stream_assembles_fragmented_tool_arguments():
 
     events = [event async for event in provider.stream(_request())]
 
-    from ai4edu.core.events import (
+    from ai4edu.models.contracts import (
         ModelStreamEnd,
         ModelTextDelta,
         ModelThinkingDelta,
@@ -97,7 +96,7 @@ async def test_stream_invalid_tool_arguments_become_input_error():
 
     events = [event async for event in provider.stream(_request())]
 
-    from ai4edu.core.events import ToolUseReady
+    from ai4edu.models.contracts import ToolUseReady
 
     ready = [event for event in events if isinstance(event, ToolUseReady)][0]
     assert ready.calls[0].input is None
@@ -130,6 +129,45 @@ async def test_wire_format_images_before_text_and_system_first():
     assert [part["type"] for part in content] == ["image_url", "text"]
     assert content[0]["image_url"]["url"].startswith("data:image/png;base64,")
     assert content[1] == {"type": "text", "text": "看这张图"}
+
+
+async def test_wire_renders_rich_tool_result_content_as_text():
+    """富内容块的工具结果在 wire 里渲染成文本（厂商接口只收字符串）。"""
+    client = FakeLLMClient([FakeResponse(text=["好"])])
+    provider = GLMProvider(client)
+
+    async for _ in provider.stream(
+        _request(
+            messages=[
+                Message(role="user", content=[TextBlock(text="查一下")]),
+                Message(
+                    role="assistant",
+                    content=[
+                        ToolUseBlock(id="call_5", name="web_search", input={}),
+                    ],
+                ),
+                Message(
+                    role="tool",
+                    content=[
+                        ToolResultBlock(
+                            tool_use_id="call_5",
+                            content=[
+                                {"type": "text", "text": "标题：勾股定理"},
+                                {"type": "text", "text": "相关度 2.4"},
+                            ],
+                        )
+                    ],
+                ),
+            ]
+        )
+    ):
+        pass
+
+    messages = client.messages(0)
+    tool_message = messages[-1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "call_5"
+    assert tool_message["content"] == "标题：勾股定理\n相关度 2.4"
 
 
 async def test_wire_format_tool_calls_and_tool_role_messages():
@@ -269,30 +307,6 @@ async def test_complete_extracts_text_and_usage():
 
     assert response.text == '{"answer": 42}'
     assert response.usage.input_tokens == 11
-
-
-async def test_complete_json_extracts_object_from_fence_and_prose():
-    client = FakeLLMClient(
-        [FakeResponse(content='先说明一下：\n```json\n{"answer": 42}\n```\n以上。')]
-    )
-    provider = GLMProvider(client)
-
-    data, response = await complete_json(provider, _request())
-
-    assert data == {"answer": 42}
-    assert response.usage.input_tokens > 0
-
-
-async def test_complete_json_raises_when_no_json_found():
-    client = FakeLLMClient([FakeResponse(content="这里没有 JSON")])
-    provider = GLMProvider(client)
-
-    with pytest.raises(JsonParseError):
-        await complete_json(provider, _request())
-
-
-async def test_extract_json_object_returns_none_for_garbage():
-    assert extract_json_object("完全没有花括号") is None
 
 
 def _openai_status_error(status_code: int) -> openai.APIStatusError:

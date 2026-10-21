@@ -8,8 +8,7 @@ from typing import Any
 import pytest
 
 import ai4edu.core.query_loop as query_loop_module
-from ai4edu.api.base import ProviderError
-from ai4edu.core.events import ModelTextDelta, TextDelta
+from ai4edu.core.events import TextDelta
 from ai4edu.core.query_loop import (
     LoopFailure,
     StepDecision,
@@ -17,6 +16,7 @@ from ai4edu.core.query_loop import (
     ToolOutcome,
     query_loop,
 )
+from ai4edu.models.contracts import ModelTextDelta, ProviderError
 from ai4edu.models.content import TextBlock
 from ai4edu.models.messages import Message
 
@@ -159,8 +159,7 @@ async def test_no_retry_after_visible_text(no_sleep):
 
 
 async def test_max_steps_raises_loop_failure(no_sleep):
-    from ai4edu.api.base import ToolUse
-    from ai4edu.core.events import ToolUseReady
+    from ai4edu.models.contracts import ToolUse, ToolUseReady
 
     steps = [
         [ToolUseReady(calls=[ToolUse(id=f"c{n}", name="record_diagnosis", input={})])]

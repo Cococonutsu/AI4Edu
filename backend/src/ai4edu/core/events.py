@@ -1,10 +1,12 @@
 """循环内外传递的事件类型。
 
-模型层事件（`ModelEvent`，定义见 `api/base.py` 的 Provider 契约）由
-Provider 从厂商流解析产出，只在本回合内消费；回合层事件（`AgentEvent`）
-是循环向服务器产出的 NDJSON 事件来源。两层都有“正文增量”，因此用不同
-的类名（`ModelTextDelta` / `TextDelta`）避免混淆。思考文本、工具参数与
-结果只保存在消息里，不出现在回合事件中。
+模型层事件（`ModelEvent`，定义见 `ai4edu.models.contracts`）由 Provider 从
+厂商流解析产出，只在本回合内消费；回合层事件（`AgentEvent`）是循环向服务器
+产出的 NDJSON 事件来源。两层都有“正文增量”，因此用不同的类名
+（`ModelTextDelta` / `TextDelta`）避免混淆。思考文本、工具参数与结果只保存
+在消息里，不出现在回合事件中。
+
+对应 `docs/architecture.md` 第 8 节（NDJSON 事件）。
 """
 
 from __future__ import annotations
@@ -12,17 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from typing import Literal, TypeAlias
-
-from ai4edu.api.base import (
-    ModelEvent,
-    ModelStreamEnd,
-    ModelTextDelta,
-    ModelThinkingDelta,
-    ModelUsage,
-    ToolUse,
-    ToolUseReady,
-    Usage,
-)
 
 # ---- 回合层事件（循环 → 服务器 → 浏览器） ----
 
@@ -86,18 +77,10 @@ AgentEvent: TypeAlias = (
 __all__ = [
     "AgentError",
     "AgentEvent",
-    "ModelEvent",
-    "ModelStreamEnd",
-    "ModelTextDelta",
-    "ModelThinkingDelta",
-    "ModelUsage",
     "TextDelta",
     "ThinkingState",
     "ToolDisplay",
     "ToolStatus",
-    "ToolUse",
-    "ToolUseReady",
     "TurnFinished",
     "TurnStarted",
-    "Usage",
 ]

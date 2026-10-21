@@ -2,6 +2,8 @@
 
 工具只做参数校验与正文截断；真正的抓取由 `ToolContext.web` 注入的
 `WebTools` 完成。网页正文不进入 `display`，学生看不到。
+
+对应 `docs/architecture.md` 第 5 节（联网工具）。
 """
 
 from __future__ import annotations
@@ -9,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
-from ai4edu.models.web import WebToolsError
 from ai4edu.tools.base import BaseTool, ToolContext, ToolResult
+from ai4edu.tools.web.client import WebToolsError
 
 _MAX_URL_LENGTH = 8192
 _MAX_CONTENT_LENGTH = 20_000

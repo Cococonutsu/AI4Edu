@@ -1,10 +1,10 @@
-"""按配置创建 Provider 与 OpenAI 兼容客户端。"""
+"""按配置创建 Provider 与 OpenAI 兼容客户端。对应 `docs/architecture.md` 第 2.2 节（Provider 工厂与凭据解析）。"""
 
 from __future__ import annotations
 
 from openai import AsyncOpenAI
 
-from ai4edu.api.base import Provider
+from ai4edu.models.contracts import Provider
 from ai4edu.api.deepseek import DeepSeekProvider
 from ai4edu.api.glm import GLMProvider
 from ai4edu.api.openai_compat import OpenAICompatProvider

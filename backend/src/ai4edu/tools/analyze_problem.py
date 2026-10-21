@@ -3,6 +3,8 @@
 读题与拆题由辅导老师自己完成（规则在 `prompts/sections.py` 的"读题与拆题"段落），
 本工具不调用任何模型：校验题目模型 → 存库 → 初始化辅导状态。校验失败时返回
 具体字段原因，老师修正后重新调用。
+
+对应 `docs/architecture.md` 第 5 节（工具）。
 """
 
 from __future__ import annotations
@@ -77,6 +79,11 @@ class AnalyzeProblemTool(BaseTool):
     )
     running_label = "正在读题…"
     input_schema: dict[str, Any] = problem_input_schema()
+
+    def is_concurrency_safe(self, input: dict[str, Any]) -> bool:
+        # 写题目并初始化辅导状态，并行执行时会互相覆盖；将来引入并行
+        # 编排时需独占（当前循环串行执行，无实际影响）。
+        return False
 
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:
         reminders = ctx.reminders

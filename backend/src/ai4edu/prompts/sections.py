@@ -6,6 +6,8 @@
 （`get_problem_decomposition_section`）也在这里。占位符统一 `{{name}}`，缺失取值抛 `ConfigError`。
 改动任何文字时提升 `builder.py` 里对应的版本号，并同步更新
 `tests/backend/prompts/golden/` 的金样例。
+
+对应 `docs/architecture.md` 第 2.1 节（提示词唯一出口）。
 """
 
 from __future__ import annotations

@@ -4,6 +4,8 @@
 "空步"：本回合到目前为止还没有任何正文，这一步也没有工具调用（例如只有
 思考就结束了）。这种情况追加提醒重试，超过上限报错。提示文字由
 `prompts.reminders` 提供并经构造函数注入。
+
+对应 `docs/architecture.md` 第 3 节（回合守卫）。
 """
 
 from __future__ import annotations

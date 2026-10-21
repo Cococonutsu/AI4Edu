@@ -168,6 +168,8 @@ def test_missing_tool_result_is_added():
         "call_2",
     ]
     assert tool_messages[1].content[0].content == "工具未执行（回合被中断）"
+    # 缺失的结果按错误结果补：模型能从 is_error 看出这不是正常返回。
+    assert tool_messages[1].content[0].is_error is True
     assert any("call_2" in fix for fix in fixes)
     validate_messages(normalized)
 

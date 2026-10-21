@@ -1,21 +1,79 @@
-"""DeepSeek 联网工具（`/v1/tools/search` 与 `/v1/tools/fetch`）的 HTTP 实现。
+"""联网工具的契约与默认实现（DeepSeek 的搜索/抓取 HTTP 端点）。
 
-联网能力走独立的 HTTP 端点，不使用聊天 SDK：本模块只导入 `httpx`，把响应
-转成 `models/web.py` 的数据契约，把网络与 HTTP 错误统一映射成
-`WebToolsError(recoverable)`。这里不做自动重试，错误原样交给工具层回给模型。
+`web_search` / `web_fetch` 只做参数校验与结果排版，真正联网的是本文件的
+`DeepSeekWebTools`：拼端点、带鉴权、解析响应、把网络与 HTTP 错误统一映射成
+`WebToolsError(recoverable)`。`WebTools` 协议是注入边界（`ToolContext.web`）：
+测试用假件替换；将来换搜索服务商，只改本文件的实现，工具不动。这里不做
+自动重试，错误原样交给工具层回给模型。
+
+对应 `docs/architecture.md` 第 5 节（联网工具）。
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 import httpx
 
 from ai4edu.config import Settings
-from ai4edu.models.web import WebFetchPage, WebSearchHit, WebToolsError
 
 # 限流、超时与服务端错误可以稍后重试；其余 4xx 是请求本身的问题。
 _RECOVERABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
+
+
+# ---- 契约（工具层只认这些结构，不关心实现） ----
+
+
+@dataclass
+class WebSearchHit:
+    """一条联网搜索结果。
+
+    `snippet` 是短摘要，`summary` 是给模型读的长摘要；`site_name` 与 `date`
+    可能缺失（厂商返回 null）。`rerank_score` 取值 0–3，`authority` 取值 -1–4，
+    都只作为模型判断可信度的参考。
+    """
+
+    title: str
+    url: str
+    snippet: str
+    summary: str
+    site_name: str | None
+    date: str | None
+    rerank_score: float
+    authority: int
+
+
+@dataclass
+class WebFetchPage:
+    """抓取到的网页正文（Markdown）。"""
+
+    title: str
+    content: str
+
+
+class WebToolsError(Exception):
+    """联网工具调用失败。
+
+    `recoverable` 表示同类请求稍后重试是否可能成功（限流、超时、服务端
+    5xx 为真；余额不足、参数错误等为假）。工具层不自动重试，把原因原样
+    回给模型。
+    """
+
+    def __init__(self, message: str, *, recoverable: bool) -> None:
+        super().__init__(message)
+        self.recoverable = recoverable
+
+
+class WebTools(Protocol):
+    """联网搜索与网页抓取；生产实现是本文件的 `DeepSeekWebTools`。"""
+
+    async def search(self, query: str, *, count: int = 5) -> list[WebSearchHit]: ...
+
+    async def fetch(self, url: str) -> WebFetchPage: ...
+
+
+# ---- 默认实现：DeepSeek 的 /v1/tools/search 与 /v1/tools/fetch ----
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -182,4 +240,11 @@ def make_web_tools(settings: Settings) -> DeepSeekWebTools | None:
     )
 
 
-__all__ = ["DeepSeekWebTools", "make_web_tools"]
+__all__ = [
+    "DeepSeekWebTools",
+    "WebFetchPage",
+    "WebSearchHit",
+    "WebTools",
+    "WebToolsError",
+    "make_web_tools",
+]

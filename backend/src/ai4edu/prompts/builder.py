@@ -6,6 +6,8 @@
 联网查询、读题与拆题、诊断与判据）+ 动态的辅导状态摘要（每一步模型调用前重算）。
 改动任何文字时提升对应版本号并同步更新
 `tests/backend/prompts/golden/` 的金样例。
+
+对应 `docs/architecture.md` 第 2.1 节（提示词唯一出口）。
 """
 
 from __future__ import annotations

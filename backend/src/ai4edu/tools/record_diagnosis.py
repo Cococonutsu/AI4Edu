@@ -1,4 +1,4 @@
-"""`record_diagnosis`：校验诊断、写证据记录、调用规则引擎。"""
+"""`record_diagnosis`：校验诊断、写证据记录、调用规则引擎。对应 `docs/architecture.md` 第 5 节（工具）。"""
 
 from __future__ import annotations
 
@@ -99,6 +99,14 @@ class RecordDiagnosisTool(BaseTool):
     )
     running_label = "正在理解你的思路…"
     input_schema = diagnosis_input_schema()
+    # 本回合刚分析完新题时，学生还没有针对子任务作答，不能诊断；
+    # 由 registry.available_for 依据本声明把本工具从列表里剔除。
+    unavailable_after = ("analyze_problem",)
+
+    def is_concurrency_safe(self, input: dict[str, Any]) -> bool:
+        # 写证据记录并推进辅导状态，并行执行时会互相覆盖；将来引入并行
+        # 编排时需独占（当前循环串行执行，无实际影响）。
+        return False
 
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:
         if ctx.problem is None:

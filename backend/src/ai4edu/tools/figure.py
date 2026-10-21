@@ -10,6 +10,8 @@
 
 说明文字（`caption`、轨迹的 `note`）是给学生看的，在这里写入；给模型看的
 工具结果文字仍来自 `prompts/reminders`。
+
+对应 `docs/architecture.md` 第 5 节（工具）。
 """
 
 from __future__ import annotations

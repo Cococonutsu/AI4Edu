@@ -5,6 +5,8 @@
 `call_model`（每步重新生成系统提示词、规范化消息、记录 `llm_calls`）→
 驱动 `query_loop`，处理取消/错误/空回复。`provider` 由构造
 函数注入（默认按配置创建），测试注入假 Provider。
+
+对应 `docs/architecture.md` 第 2、3 节（组装依赖与回合流程）。
 """
 
 from __future__ import annotations
@@ -21,21 +23,11 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai4edu.api.base import (
-    ImageLoader,
-    ModelRequest,
-    Provider,
-    ToolSchema,
-    Usage,
-)
-from ai4edu.api.client import make_provider
-from ai4edu.api.deepseek_tools import make_web_tools
+from ai4edu.api.client import llm_credentials, make_provider
 from ai4edu.config import Settings
 from ai4edu.core.events import (
     AgentError,
     AgentEvent,
-    ModelEvent,
-    ModelUsage,
     TextDelta,
     TurnFinished,
     TurnStarted,
@@ -48,9 +40,17 @@ from ai4edu.core.query_loop import (
 )
 from ai4edu.hooks.guard import TurnGuard
 from ai4edu.hooks.tutoring_hooks import TutoringHooks
-from ai4edu.models.content import ImageBlock, TextBlock
+from ai4edu.models.contracts import (
+    ImageLoader,
+    ModelEvent,
+    ModelRequest,
+    ModelUsage,
+    Provider,
+    ToolSchema,
+    Usage,
+)
+from ai4edu.models.content import ImageBlock, TextBlock, tool_result_text
 from ai4edu.models.messages import Message, prepare_messages
-from ai4edu.models.web import WebTools
 from ai4edu.prompts import Reminders
 from ai4edu.prompts.builder import TUTOR_SYSTEM_VERSION, build_system_prompt
 from ai4edu.prompts.reminders import Reminders
@@ -58,7 +58,8 @@ from ai4edu.session.store import TurnStore
 from ai4edu.storage.db import async_session
 from ai4edu.storage.models import User
 from ai4edu.tools.base import ToolContext
-from ai4edu.tools.registry import get_tool, tools_for
+from ai4edu.tools.registry import ToolRegistry, build_registry, to_tool_schemas
+from ai4edu.tools.web.client import WebTools, make_web_tools
 from ai4edu.tutoring.framework import TutoringConfig
 from ai4edu.tutoring.problem import ProblemModel
 from ai4edu.tutoring.state import TutorState
@@ -134,22 +135,18 @@ class ToolRunnerAdapter:
     未知工具、非法参数、执行异常都在这里转成给模型的错误结果。
     """
 
-    def __init__(self, ctx: ToolContext, reminders: Reminders) -> None:
+    def __init__(self, ctx: ToolContext, reminders: Reminders, registry: ToolRegistry) -> None:
         self._ctx = ctx
         self._reminders = reminders
+        self._registry = registry
 
     def schemas(self) -> list[ToolSchema]:
-        return [
-            ToolSchema(
-                name=tool.name,
-                description=tool.description,
-                input_schema=tool.input_schema,
-            )
-            for tool in tools_for(self._ctx.state.phase)
-        ]
+        return to_tool_schemas(
+            self._registry.available_for(self._ctx.state.phase)
+        )
 
     def running_label(self, name: str) -> str:
-        tool = get_tool(name)
+        tool = self._registry.get(name)
         return tool.running_label if tool is not None else name
 
     async def execute(
@@ -158,7 +155,7 @@ class ToolRunnerAdapter:
         arguments: dict[str, Any] | None,
         input_error: str | None,
     ) -> ToolOutcome:
-        tool = get_tool(name)
+        tool = self._registry.get(name)
         if tool is None:
             return ToolOutcome(
                 content=self._reminders.text("unknown_tool", name=name),
@@ -185,7 +182,7 @@ class ToolRunnerAdapter:
                 status_label="工具出错",
             )
         return ToolOutcome(
-            content=result.content,
+            content=tool_result_text(result.content),
             is_error=result.is_error,
             status_label=result.status_label,
             display=result.display,
@@ -203,6 +200,7 @@ class QueryEngine:
         reminders: Reminders,
         provider: Provider | None = None,
         web: WebTools | None = None,
+        registry: ToolRegistry | None = None,
         max_steps: int = 8,
         session_factory: SessionFactory | None = None,
     ) -> None:
@@ -211,6 +209,13 @@ class QueryEngine:
         self._reminders = reminders
         self._provider = provider or make_provider(settings)
         self._web = web if web is not None else make_web_tools(settings)
+        self._registry = registry or build_registry()
+        if not llm_credentials(settings)[1]:
+            # 没有密钥时登录、会话都能用，只有发消息会失败；建引擎时就说清楚。
+            logger.error(
+                "未配置 LLM_API_KEY（LLM_PROVIDER=deepseek 时可改用 DEEPSEEK_API_KEY）："
+                "发送消息将失败。请复制 backend/.env.example 为 backend/.env 并填写密钥。"
+            )
         self._max_steps = max_steps
         # 测试可注入临时数据库的会话工厂；生产环境使用进程级工厂。
         self._session_factory = session_factory or async_session
@@ -329,9 +334,12 @@ class QueryEngine:
             error_message=self._reminders.student_guard_error,
         )
         hooks = TutoringHooks(
-            ctx=ctx, guard=guard, reminders=self._reminders
+            ctx=ctx,
+            guard=guard,
+            reminders=self._reminders,
+            registry=self._registry,
         )
-        runner = ToolRunnerAdapter(ctx, self._reminders)
+        runner = ToolRunnerAdapter(ctx, self._reminders, self._registry)
         failure_texts = _FailureTexts.from_reminders(self._reminders)
 
         async def call_model(step_request: StepRequest) -> AsyncIterator[ModelEvent]:

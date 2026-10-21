@@ -7,9 +7,8 @@ import json
 import httpx
 import pytest
 
-from ai4edu.api.deepseek_tools import DeepSeekWebTools, make_web_tools
 from ai4edu.config import Settings
-from ai4edu.models.web import WebToolsError
+from ai4edu.tools.web.client import DeepSeekWebTools, WebToolsError, make_web_tools
 
 pytestmark = pytest.mark.asyncio
 

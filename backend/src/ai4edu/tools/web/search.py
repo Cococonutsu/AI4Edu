@@ -1,16 +1,18 @@
 """`web_search`：老师联网搜索，结果只有模型可见。
 
 工具只做参数校验与结果排版；真正的搜索由 `ToolContext.web` 注入的
-`WebTools` 完成（`api/deepseek_tools.py` 是生产实现）。搜索结果不进入
+`WebTools` 完成（本目录 `client.py` 是生产实现）。搜索结果不进入
 `display`，学生看不到。
+
+对应 `docs/architecture.md` 第 5 节（联网工具）。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ai4edu.models.web import WebSearchHit, WebToolsError
 from ai4edu.tools.base import BaseTool, ToolContext, ToolResult
+from ai4edu.tools.web.client import WebSearchHit, WebToolsError
 
 _MAX_QUERY_LENGTH = 128
 _DEFAULT_COUNT = 5

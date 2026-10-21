@@ -8,13 +8,15 @@ import httpx
 import openai
 import pytest
 
-from ai4edu.api.base import ModelRequest, ProviderError, ToolSchema
 from ai4edu.api.deepseek import DeepSeekProvider
-from ai4edu.core.events import (
+from ai4edu.models.contracts import (
+    ModelRequest,
     ModelStreamEnd,
     ModelTextDelta,
     ModelThinkingDelta,
     ModelUsage,
+    ProviderError,
+    ToolSchema,
     ToolUseReady,
 )
 from ai4edu.models.content import TextBlock

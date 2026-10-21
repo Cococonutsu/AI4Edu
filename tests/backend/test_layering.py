@@ -3,6 +3,9 @@
 - `core/query_loop.py` 只依赖 `models/`、`core/events.py` 与传入的参数；
 - 只有 `api/glm.py`、`api/deepseek.py`、`api/openai_compat.py`、`api/client.py`
   可以 `import openai`；
+- `ai4edu.api` 是厂商实现层：src 中除 `api/` 自身外，只有
+  `core/query_engine.py`（经 `client.py` 创建 Provider）可以导入它，
+  其余模块只使用 `models/contracts` 里的契约类型；
 - `models/` 不导入 `ai4edu` 的其他子包；
 - 只有 `prompts/` 读取 `config/prompts/` 的模板文件；
 - 只有 `session/`、`auth/`、`server/routes/`、`cli/` 与 `storage/` 自身
@@ -84,6 +87,24 @@ def test_only_api_provider_modules_import_openai():
                 f"{path.relative_to(SRC)} 导入了 {offender}；"
                 "只有 api/glm.py、api/deepseek.py、api/openai_compat.py "
                 "与 api/client.py 可以导入厂商 SDK"
+            )
+
+
+def test_only_query_engine_imports_api():
+    allowed = {SRC / "core" / "query_engine.py"}
+    for path in _python_files():
+        if (path.parent.relative_to(SRC)).parts[0:1] == ("api",):
+            continue
+        offender = next(
+            (m for m in _imports_of(path) if m.startswith("ai4edu.api")),
+            None,
+        )
+        if offender:
+            assert path in allowed, (
+                f"{path.relative_to(SRC)} 导入了 {offender}；"
+                "ai4edu.api 是厂商实现层，src 中只有 core/query_engine.py"
+                "（经 client.py 创建 Provider）可以导入它，"
+                "其余模块使用 models/contracts 里的契约类型"
             )
 
 

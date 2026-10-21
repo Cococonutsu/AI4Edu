@@ -9,6 +9,8 @@
 `GLMProvider` 与 `DeepSeekProvider` 继承 `OpenAICompatProvider`；厂商特有的
 协议差异（例如 DeepSeek 思考模式下 `tool_choice` 的限制）只在各自文件里覆写。
 收到的 `ModelRequest.messages` 已经过 `prepare_messages()`，此处只做格式转换。
+
+对应 `docs/architecture.md` 第 2.2 节（Provider 协议与厂商实现）。
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from openai import (
     AsyncOpenAI,
 )
 
-from ai4edu.api.base import (
+from ai4edu.models.contracts import (
     ImageLoader,
     ModelEvent,
     ModelRequest,
@@ -47,6 +49,7 @@ from ai4edu.models.content import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
+    tool_result_text,
 )
 
 _RECOVERABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
@@ -82,7 +85,8 @@ def _to_wire(request: ModelRequest) -> list[dict[str, Any]]:
                         {
                             "role": "tool",
                             "tool_call_id": block.tool_use_id,
-                            "content": block.content,
+                            # 富内容块渲染成文本再发给模型（厂商接口只收字符串）。
+                            "content": tool_result_text(block.content),
                         }
                     )
 

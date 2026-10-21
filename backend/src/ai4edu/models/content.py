@@ -9,6 +9,7 @@ JSON 格式严格按 `docs/architecture.md` 7.1 节；未知块类型读取时�
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
@@ -48,15 +49,40 @@ class ToolUseBlock:
     type: Literal["tool_use"] = "tool_use"
 
 
+# 工具结果的内容：目前是纯文本；预留更细粒度的富内容块（结构化命中、
+# 图片等，对齐 cc 的 ToolResult.content 联合类型）。入库按原样写入
+# content_json（两种形态都是合法 JSON），发给模型前用 `tool_result_text`
+# 渲染成文本。
+ToolResultContent: TypeAlias = str | list[dict[str, Any]]
+
+
 @dataclass
 class ToolResultBlock:
     tool_use_id: str
-    content: str
+    content: ToolResultContent
     is_error: bool = False
     status_label: str = ""
     # 允许下发给浏览器的展示数据（`draw_figure` 的图）；旧数据没有这个字段。
     display: dict[str, Any] | None = None
     type: Literal["tool_result"] = "tool_result"
+
+
+def tool_result_text(content: ToolResultContent) -> str:
+    """把工具结果内容渲染成给模型的纯文本：字符串原样；富内容块逐块取
+    `text` 字段（没有的渲染成 JSON），用换行连接。"""
+
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict):
+            text = item.get("text")
+            parts.append(
+                str(text) if text is not None else json.dumps(item, ensure_ascii=False)
+            )
+        else:
+            parts.append(str(item))
+    return "\n".join(parts)
 
 
 Block: TypeAlias = (
@@ -125,10 +151,17 @@ def block_from_json(data: Any) -> Block | None:
             input=raw_input if isinstance(raw_input, dict) else {},
         )
     if block_type == "tool_result":
+        raw_content = data.get("content")
+        # 新数据可能是富内容块列表，旧数据一律是字符串。
+        content: ToolResultContent = (
+            raw_content
+            if isinstance(raw_content, (str, list))
+            else str(raw_content or "")
+        )
         raw_display = data.get("display")
         return ToolResultBlock(
             tool_use_id=str(data.get("tool_use_id") or ""),
-            content=str(data.get("content") or ""),
+            content=content,
             is_error=bool(data.get("is_error")),
             status_label=str(data.get("status_label") or ""),
             display=raw_display if isinstance(raw_display, dict) else None,

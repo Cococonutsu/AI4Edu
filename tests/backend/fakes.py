@@ -15,21 +15,19 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-from ai4edu.api.base import (
+from ai4edu.models.contracts import (
     ModelRequest,
     ModelResponse,
-    ProviderError,
-    ToolUse,
-    Usage,
-)
-from ai4edu.core.events import (
     ModelStreamEnd,
     ModelTextDelta,
     ModelThinkingDelta,
     ModelUsage,
+    ProviderError,
+    ToolUse,
     ToolUseReady,
+    Usage,
 )
-from ai4edu.models.web import WebFetchPage, WebSearchHit, WebToolsError
+from ai4edu.tools.web.client import WebFetchPage, WebSearchHit, WebToolsError
 
 
 def _as_parts(value: list[str] | str | None) -> list[str]:
