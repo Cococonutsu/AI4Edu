@@ -34,6 +34,7 @@ export interface Conversation {
   updated_at: string;
 }
 
+/** 消息里引用的一张图；字段与上传接口返回的 UploadedAttachment 相同。 */
 export interface MessageAttachment {
   id: number;
   /** 同源图片地址，通常是 /api/attachments/{id}。 */
@@ -132,10 +133,8 @@ export interface ConversationDetail extends Conversation {
   messages: Message[];
 }
 
-export interface UploadedAttachment {
-  id: number;
-  url: string;
-}
+/** 上传接口返回的附件；与消息里的 MessageAttachment 同形，两个名字区分来源。 */
+export type UploadedAttachment = MessageAttachment;
 
 /* ---------- NDJSON 流事件（docs/architecture.md 第 8 节） ---------- */
 
@@ -166,6 +165,9 @@ export interface ToolStatusEvent {
   state: ToolState;
 }
 
+/** 等待区展示的工具状态：是 ToolStatusEvent 去掉事件类型后的展示字段。 */
+export type ToolDisplayStatus = Pick<ToolStatusEvent, 'tool' | 'label' | 'state'>;
+
 export interface TurnFinishedEvent {
   type: 'turn_finished';
   status: TurnStatus;
@@ -191,12 +193,33 @@ export interface UnknownStreamEvent {
   payload: Record<string, unknown>;
 }
 
-export type StreamEvent =
-  | TurnStartedEvent
-  | TextDeltaEvent
-  | ThinkingEvent
-  | ToolStatusEvent
-  | DisplayEvent
-  | TurnFinishedEvent
-  | ErrorEvent
-  | UnknownStreamEvent;
+/* ------------------------- 流事件清单与联合类型 ------------------------- */
+
+/**
+ * 解码器认识的全部流事件类型。
+ * stream.ts 的已知集合与 StreamEventType 都从这里派生，新增事件只改这一处。
+ */
+export const STREAM_EVENT_TYPES = [
+  'turn_started',
+  'text_delta',
+  'thinking',
+  'tool_status',
+  'display',
+  'turn_finished',
+  'error',
+] as const;
+
+export type StreamEventType = (typeof STREAM_EVENT_TYPES)[number];
+
+/** 每种已知事件类型对应的数据结构；清单里有类型而这里漏配时，下面的索引访问会报错。 */
+interface KnownStreamEventMap {
+  turn_started: TurnStartedEvent;
+  text_delta: TextDeltaEvent;
+  thinking: ThinkingEvent;
+  tool_status: ToolStatusEvent;
+  display: DisplayEvent;
+  turn_finished: TurnFinishedEvent;
+  error: ErrorEvent;
+}
+
+export type StreamEvent = KnownStreamEventMap[StreamEventType] | UnknownStreamEvent;

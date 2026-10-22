@@ -1,14 +1,7 @@
+import { STREAM_EVENT_TYPES } from './types';
 import type { ErrorEvent, StreamEvent } from './types';
 
-const KNOWN_EVENT_TYPES = new Set([
-  'turn_started',
-  'text_delta',
-  'thinking',
-  'tool_status',
-  'display',
-  'turn_finished',
-  'error',
-]);
+const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set<string>(STREAM_EVENT_TYPES);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

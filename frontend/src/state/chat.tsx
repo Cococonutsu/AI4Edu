@@ -1,3 +1,14 @@
+/**
+ * 聊天状态的瘦 Provider：只做组合。
+ *
+ * - 用 useReducer 持有 chatReducer 的纯状态机；
+ * - 调用 chatActions 里的各业务域 hook（会话列表、流消费、连发控制、图示面板），
+ *   把它们的返回值拼成 context value；
+ * - 唯一知道路由的地方：新建会话成功后跳转、删除当前会话后回到首页。
+ *
+ * reducer 实现在 chatReducer.ts，各域的回调与副作用在 chatActions.ts。
+ */
+
 import {
   createContext,
   useCallback,
@@ -9,499 +20,24 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as api from '../api/client';
-import { describeError, isUnauthorized } from '../api/client';
-import { readNdjsonStream } from '../api/stream';
-import type {
-  Conversation,
-  ConversationPhase,
-  FigureSpec,
-  Message,
-  ToolState,
-  TurnStatus,
-} from '../api/types';
-import { pendingReplyStart } from '../utils/pendingReply';
-import { waitKind, type WaitKind } from '../utils/waiting';
+import type { Conversation, FigureSpec } from '../api/types';
+import {
+  useConversationList,
+  useFigurePanel,
+  useMessageStream,
+  useSending,
+} from './chatActions';
+import {
+  initialState,
+  reducer,
+  type ChatAction,
+  type ChatState,
+  type DisplayMessage,
+  type ToolDisplayStatus,
+} from './chatReducer';
 
-export interface ToolDisplayStatus {
-  tool: string;
-  label: string;
-  state: ToolState;
-}
-
-export interface DisplayMessage extends Message {
-  /** 正在接收这个气泡的流式内容。 */
-  streaming?: boolean;
-  thinking?: boolean;
-  toolStatus?: ToolDisplayStatus | null;
-  /** 回合结束后的提示（已停止、出错等）。 */
-  notice?: string | null;
-  /** 开始等待的时间（毫秒时间戳），用于显示已等时长与阶段文案。 */
-  waitStartedAt?: number;
-  /** 这条消息是否带图，和会话阶段一起决定等待文案。 */
-  hasImage?: boolean;
-  /** 等待文案的种类；回合开始事件到达后按真实阶段修正。 */
-  waitKind?: WaitKind;
-  /** 这一回合老师打开过的图示。 */
-  figures?: FigureSpec[];
-}
-
-interface ChatState {
-  conversations: Conversation[];
-  conversationsLoading: boolean;
-  activeId: number | null;
-  loadedId: number | null;
-  suppressLoadId: number | null;
-  messages: DisplayMessage[];
-  messagesLoading: boolean;
-  messagesError: string | null;
-  sending: boolean;
-  /** 当前正在接收的助手气泡 id，用来忽略上一个回合迟到的结束事件。 */
-  streamTurnId: number | null;
-  /** 正在后台生成、本页没有接着流的会话 id（切回来后轮询等它答完）。 */
-  backgroundRunId: number | null;
-  error: string | null;
-  /** 右侧图示面板当前展示的图；null 表示还没有打开过。 */
-  figure: FigureSpec | null;
-  /** 面板是否展开（有图时默认展开，学生可以收起）。 */
-  figureOpen: boolean;
-}
-
-type ChatAction =
-  | { type: 'conversations_loading' }
-  | { type: 'conversations_loaded'; items: Conversation[] }
-  | { type: 'conversations_failed'; message: string | null }
-  | { type: 'conversation_merged'; conversation: Conversation }
-  | { type: 'conversation_created'; conversation: Conversation }
-  | { type: 'conversation_renamed'; id: number; title: string }
-  | { type: 'conversation_deleted'; id: number }
-  | { type: 'activate'; id: number | null }
-  | { type: 'suppress_load_cleared'; id: number }
-  | { type: 'messages_loading'; id: number }
-  | {
-      type: 'messages_loaded';
-      id: number;
-      messages: Message[];
-      /** 后端说这个会话还在生成。 */
-      running?: boolean;
-      /** 还在生成且最后一条是学生消息时补的等待气泡。 */
-      pending?: DisplayMessage | null;
-    }
-  | { type: 'messages_failed'; id: number; message: string }
-  | {
-      type: 'send_start';
-      conversationId: number;
-      userMessage: DisplayMessage;
-      assistantMessage: DisplayMessage;
-    }
-  | {
-      type: 'delta';
-      conversationId: number;
-      messageId: number;
-      text: string;
-    }
-  | {
-      type: 'turn_started';
-      conversationId: number;
-      messageId: number;
-      phase: ConversationPhase | null;
-    }
-  | {
-      type: 'thinking';
-      conversationId: number;
-      messageId: number;
-      active: boolean;
-    }
-  | {
-      type: 'tool_status';
-      conversationId: number;
-      messageId: number;
-      status: ToolDisplayStatus | null;
-    }
-  | {
-      type: 'stream_notice';
-      conversationId: number;
-      messageId: number;
-      notice: string;
-    }
-  | {
-      type: 'turn_finished';
-      conversationId: number;
-      turnId: number;
-      status: TurnStatus;
-    }
-  | { type: 'send_end'; conversationId: number; turnId: number }
-  | {
-      type: 'figure_show';
-      conversationId: number;
-      figure: FigureSpec;
-      fromHistory?: boolean;
-    }
-  | { type: 'figure_open'; conversationId: number; figure: FigureSpec | null }
-  | { type: 'figure_close' }
-  | { type: 'figure_toggle' }
-  | { type: 'error'; message: string }
-  | { type: 'clear_error' };
-
-const initialState: ChatState = {
-  conversations: [],
-  conversationsLoading: true,
-  activeId: null,
-  loadedId: null,
-  suppressLoadId: null,
-  messages: [],
-  messagesLoading: false,
-  messagesError: null,
-  sending: false,
-  streamTurnId: null,
-  backgroundRunId: null,
-  error: null,
-  figure: null,
-  figureOpen: false,
-};
-
-let tempIdSeq = -1;
-
-function nextTempId(): number {
-  const id = tempIdSeq;
-  tempIdSeq -= 1;
-  return id;
-}
-
-function timestamp(value: string): number {
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function sortConversations(items: Conversation[]): Conversation[] {
-  return [...items].sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at));
-}
-
-function mergeConversation(items: Conversation[], conversation: Conversation): Conversation[] {
-  const exists = items.some((item) => item.id === conversation.id);
-  if (!exists) {
-    return sortConversations([conversation, ...items]);
-  }
-  return items.map((item) => (item.id === conversation.id ? { ...item, ...conversation } : item));
-}
-
-function updateMessage(
-  messages: DisplayMessage[],
-  messageId: number,
-  update: (message: DisplayMessage) => DisplayMessage,
-): DisplayMessage[] {
-  return messages.map((message) => (message.id === messageId ? update(message) : message));
-}
-
-function noticeForStatus(status: TurnStatus): string | null {
-  if (status === 'stopped') return '已停止生成。';
-  if (status === 'error') return '这次回答没有完成，请再试一次。';
-  return null;
-}
-
-function reducer(state: ChatState, action: ChatAction): ChatState {
-  switch (action.type) {
-    case 'conversations_loading':
-      return { ...state, conversationsLoading: true };
-
-    case 'conversations_loaded':
-      return {
-        ...state,
-        conversations: sortConversations(action.items),
-        conversationsLoading: false,
-      };
-
-    case 'conversations_failed':
-      return {
-        ...state,
-        conversationsLoading: false,
-        error: action.message ?? state.error,
-      };
-
-    case 'conversation_merged':
-      return {
-        ...state,
-        conversations: mergeConversation(state.conversations, action.conversation),
-      };
-
-    case 'conversation_created':
-      return {
-        ...state,
-        conversations: mergeConversation(state.conversations, action.conversation),
-        activeId: action.conversation.id,
-        loadedId: action.conversation.id,
-        suppressLoadId: action.conversation.id,
-        messages: [],
-        messagesLoading: false,
-        messagesError: null,
-        streamTurnId: null,
-        backgroundRunId: null,
-        error: null,
-        figure: null,
-        figureOpen: false,
-      };
-
-    case 'conversation_renamed':
-      return {
-        ...state,
-        conversations: state.conversations.map((item) => (
-          item.id === action.id ? { ...item, title: action.title } : item
-        )),
-      };
-
-    case 'conversation_deleted': {
-      const conversations = state.conversations.filter((item) => item.id !== action.id);
-      if (state.activeId !== action.id) {
-        return { ...state, conversations };
-      }
-      return {
-        ...state,
-        conversations,
-        activeId: null,
-        loadedId: null,
-        suppressLoadId: null,
-        messages: [],
-        messagesLoading: false,
-        messagesError: null,
-        sending: false,
-        streamTurnId: null,
-        backgroundRunId: null,
-      };
-    }
-
-    case 'activate': {
-      if (action.id === state.activeId) {
-        if (state.suppressLoadId === action.id) {
-          return { ...state, suppressLoadId: null };
-        }
-        return state;
-      }
-      return {
-        ...state,
-        activeId: action.id,
-        loadedId: null,
-        suppressLoadId: null,
-        messages: [],
-        messagesLoading: action.id !== null,
-        messagesError: null,
-        sending: false,
-        streamTurnId: null,
-        backgroundRunId: null,
-        error: null,
-        // 切换会话时先清空图；加载完历史后再按最新的一张打开。
-        figure: null,
-        figureOpen: false,
-      };
-    }
-
-    case 'suppress_load_cleared':
-      return state.suppressLoadId === action.id
-        ? { ...state, suppressLoadId: null }
-        : state;
-
-    case 'messages_loading':
-      if (state.activeId !== action.id) {
-        return state;
-      }
-      return { ...state, messagesLoading: true, messagesError: null };
-
-    case 'messages_loaded':
-      if (state.activeId !== action.id) {
-        return state;
-      }
-      const messages: DisplayMessage[] = action.messages.map((message) => ({ ...message }));
-      const lastFigure = [...messages]
-        .reverse()
-        .flatMap((message) => message.figures ?? [])[0] ?? null;
-      // 本页正在接收流时不碰发送状态；否则按后端的 running 进入或结束"后台等待"。
-      const foreground = state.streamTurnId !== null;
-      const running = !foreground && action.running === true;
-      if (running && action.pending) {
-        messages.push(action.pending);
-      }
-      return {
-        ...state,
-        messages,
-        loadedId: action.id,
-        messagesLoading: false,
-        messagesError: null,
-        sending: foreground ? state.sending : running,
-        backgroundRunId: running ? action.id : null,
-        figure: lastFigure ?? state.figure,
-        figureOpen: lastFigure !== null ? true : state.figureOpen,
-      };
-
-    case 'messages_failed':
-      if (state.activeId !== action.id) {
-        return state;
-      }
-      return {
-        ...state,
-        messagesLoading: false,
-        messagesError: action.message,
-      };
-
-    case 'send_start':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: [...state.messages, action.userMessage, action.assistantMessage],
-        sending: true,
-        streamTurnId: action.assistantMessage.id,
-        error: null,
-      };
-
-    case 'delta':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: updateMessage(state.messages, action.messageId, (message) => ({
-          ...message,
-          text: message.text + action.text,
-        })),
-      };
-
-    case 'turn_started':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: updateMessage(state.messages, action.messageId, (message) => ({
-          ...message,
-          waitKind: waitKind(action.phase, message.hasImage === true),
-        })),
-      };
-
-    case 'thinking':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: updateMessage(state.messages, action.messageId, (message) => ({
-          ...message,
-          thinking: action.active,
-        })),
-      };
-
-    case 'tool_status':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: updateMessage(state.messages, action.messageId, (message) => ({
-          ...message,
-          toolStatus: action.status,
-        })),
-      };
-
-    case 'stream_notice':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        messages: updateMessage(state.messages, action.messageId, (message) => ({
-          ...message,
-          notice: action.notice,
-        })),
-      };
-
-    case 'turn_finished': {
-      if (state.activeId !== action.conversationId || state.streamTurnId !== action.turnId) {
-        return state;
-      }
-      const notice = noticeForStatus(action.status);
-      return {
-        ...state,
-        sending: false,
-        streamTurnId: null,
-        messages: state.messages.map((message) => (
-          message.streaming
-            ? {
-                ...message,
-                streaming: false,
-                thinking: false,
-                toolStatus: message.toolStatus?.state === 'running' ? null : message.toolStatus,
-                notice: message.notice ?? notice,
-              }
-            : message
-        )),
-      };
-    }
-
-    case 'send_end':
-      if (state.activeId !== action.conversationId || state.streamTurnId !== action.turnId) {
-        return state;
-      }
-      return {
-        ...state,
-        sending: false,
-        streamTurnId: null,
-        messages: state.messages.map((message) => (
-          message.streaming
-            ? {
-                ...message,
-                streaming: false,
-                thinking: false,
-                toolStatus: message.toolStatus?.state === 'running' ? null : message.toolStatus,
-              }
-            : message
-        )),
-      };
-
-    case 'figure_show': {
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      const streaming = state.messages.filter((message) => message.streaming === true);
-      const target = streaming[streaming.length - 1];
-      return {
-        ...state,
-        messages: target === undefined
-          ? state.messages
-          : updateMessage(state.messages, target.id, (message) => ({
-              ...message,
-              figures: [...(message.figures ?? []), action.figure],
-            })),
-        figure: action.figure,
-        // 历史加载时只恢复图，不改动学生当前的收起状态。
-        figureOpen: action.fromHistory ? state.figureOpen : true,
-      };
-    }
-
-    case 'figure_open':
-      if (state.activeId !== action.conversationId) {
-        return state;
-      }
-      return {
-        ...state,
-        figure: action.figure ?? state.figure,
-        figureOpen: true,
-      };
-
-    case 'figure_close':
-      return { ...state, figureOpen: false };
-
-    case 'figure_toggle':
-      return { ...state, figureOpen: !state.figureOpen };
-
-    case 'error':
-      return { ...state, error: action.message };
-
-    case 'clear_error':
-      return { ...state, error: null };
-
-    default:
-      return state;
-  }
-}
+// 供既有消费方（如 MessageBubble）继续从 '../state/chat' 引类型。
+export type { ChatAction, ChatState, DisplayMessage, ToolDisplayStatus };
 
 interface ChatContextValue {
   conversations: Conversation[];
@@ -516,6 +52,8 @@ interface ChatContextValue {
   /** 右侧面板当前展示的图与展开状态。 */
   figure: FigureSpec | null;
   figureOpen: boolean;
+  setFigure: (figure: FigureSpec | null) => void;
+  setFigureOpen: (open: boolean) => void;
   openFigure: (figure: FigureSpec) => void;
   closeFigure: () => void;
   toggleFigure: () => void;
@@ -529,464 +67,51 @@ interface ChatContextValue {
   clearError: () => void;
 }
 
-/** 会话还在后台生成、最后一条是学生消息时，补一个等待气泡。 */
-function pendingBubble(detail: Conversation & { messages: Message[] }): DisplayMessage | null {
-  const pending = pendingReplyStart(detail.messages, detail.running === true);
-  if (pending === null) {
-    return null;
-  }
-  return {
-    id: nextTempId(),
-    role: 'assistant',
-    text: '',
-    attachments: [],
-    created_at: new Date(pending.startedAt).toISOString(),
-    streaming: true,
-    thinking: false,
-    toolStatus: null,
-    notice: null,
-    waitStartedAt: pending.startedAt,
-    hasImage: pending.hasImage,
-    waitKind: waitKind(detail.phase, pending.hasImage),
-    figures: [],
-  };
-}
-
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }): JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState);
   const navigate = useNavigate();
-
   const stateRef = useRef(state);
   stateRef.current = state;
-  const abortRef = useRef<AbortController | null>(null);
-  const sendingRef = useRef(false);
-  const creatingRef = useRef(false);
-  const loadingIdsRef = useRef(new Set<number>());
 
-  const refreshConversations = useCallback(async () => {
-    dispatch({ type: 'conversations_loading' });
-    try {
-      const items = await api.listConversations();
-      dispatch({ type: 'conversations_loaded', items });
-    } catch (error) {
-      if (!isUnauthorized(error)) {
-        dispatch({
-          type: 'conversations_failed',
-          message: describeError(error, '无法加载对话列表，请刷新页面重试。'),
-        });
-      } else {
-        dispatch({ type: 'conversations_failed', message: null });
-      }
-    }
-  }, []);
+  const list = useConversationList(dispatch, state);
+  const sending = useSending();
+  const figurePanel = useFigurePanel();
 
-  useEffect(() => {
-    void refreshConversations();
-  }, [refreshConversations]);
+  const onConversationCreated = useCallback((conversation: Conversation) => {
+    navigate(`/c/${conversation.id}`, { replace: true });
+  }, [navigate]);
 
-  useEffect(() => () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    sendingRef.current = false;
-  }, []);
+  const stream = useMessageStream(dispatch, state, {
+    sending,
+    createConversation: list.createConversation,
+    refresh: list.refresh,
+    figure: figurePanel,
+    onConversationCreated,
+  });
 
-  const loadMessages = useCallback(async (id: number) => {
-    if (loadingIdsRef.current.has(id)) {
-      return;
-    }
-    loadingIdsRef.current.add(id);
-    dispatch({ type: 'messages_loading', id });
-    try {
-      const detail = await api.getConversation(id);
-      dispatch({
-        type: 'messages_loaded',
-        id,
-        messages: detail.messages,
-        running: detail.running === true,
-        pending: pendingBubble(detail),
-      });
-      dispatch({ type: 'conversation_merged', conversation: detail });
-    } catch (error) {
-      if (!isUnauthorized(error)) {
-        dispatch({
-          type: 'messages_failed',
-          id,
-          message: describeError(error, '无法加载这个对话，请稍后重试。'),
-        });
-      }
-    } finally {
-      loadingIdsRef.current.delete(id);
-    }
-  }, []);
-
-  const activateConversation = useCallback((id: number | null) => {
-    const current = stateRef.current;
-
-    if (id === current.activeId) {
-      if (id !== null && current.suppressLoadId === id) {
-        dispatch({ type: 'suppress_load_cleared', id });
-        return;
-      }
-      if (id !== null && current.loadedId !== id && current.messagesError === null) {
-        void loadMessages(id);
-      }
-      return;
-    }
-
-    if (current.sending) {
-      // 只断开本页对这条流的接收；后端会继续把回答生成完并存库，
-      // 切回来时按 running 显示等待并轮询（不调用 /stop）。
-      abortRef.current?.abort();
-      abortRef.current = null;
-      sendingRef.current = false;
-    }
-
-    dispatch({ type: 'activate', id });
-    if (id !== null) {
-      void loadMessages(id);
-    }
-  }, [loadMessages]);
-
+  // 切回来的是仍在后台生成的会话时，轮询等它答完。
   useEffect(() => {
     const id = state.backgroundRunId;
     if (id === null || id !== state.activeId) {
       return undefined;
     }
-    let cancelled = false;
-    const timer = window.setInterval(() => {
-      void api.getConversation(id).then((detail) => {
-        if (cancelled || detail.running === true) {
-          return;
-        }
-        dispatch({ type: 'messages_loaded', id, messages: detail.messages, running: false });
-        dispatch({ type: 'conversation_merged', conversation: detail });
-        void refreshConversations();
-      }).catch(() => {
-        // 网络抖动：下一次再看。
-      });
-    }, 2500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [state.backgroundRunId, state.activeId, refreshConversations]);
+    return stream.pollBackgroundRun(id);
+  }, [state.backgroundRunId, state.activeId, stream.pollBackgroundRun]);
 
-  // 侧边栏：有别的对话在后台生成时，定期刷新列表，让"正在回答"的标记按时消失。
-  const anyBackgroundRunning = state.conversations.some(
-    (item) => item.running === true && item.id !== state.activeId,
-  );
-  useEffect(() => {
-    if (!anyBackgroundRunning) {
-      return undefined;
-    }
-    const timer = window.setInterval(() => {
-      void refreshConversations();
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [anyBackgroundRunning, refreshConversations]);
-
-  const reloadConversation = useCallback(() => {
-    const id = stateRef.current.activeId;
-    if (id === null) {
-      return;
-    }
-    loadingIdsRef.current.delete(id);
-    void loadMessages(id);
-  }, [loadMessages]);
-
-  const runTurn = useCallback(async (
-    conversationId: number,
-    text: string,
-    attachmentIds: number[],
-    assistantId: number,
-    controller: AbortController,
-  ) => {
-    let ended = false;
-    let finishedByEvent = false;
-    let receivedError = false;
-
-    const endTurn = () => {
-      if (ended) {
-        return;
-      }
-      ended = true;
-      if (abortRef.current === controller) {
-        abortRef.current = null;
-        sendingRef.current = false;
-      }
-      dispatch({ type: 'send_end', conversationId, turnId: assistantId });
-      void refreshConversations();
-    };
-
-    try {
-      const body = await api.sendMessage(conversationId, text, attachmentIds, controller.signal);
-      for await (const event of readNdjsonStream(body)) {
-        switch (event.type) {
-          case 'turn_started':
-            dispatch({
-              type: 'turn_started',
-              conversationId,
-              messageId: assistantId,
-              phase: event.phase ?? null,
-            });
-            break;
-
-          case 'text_delta':
-            dispatch({
-              type: 'delta',
-              conversationId,
-              messageId: assistantId,
-              text: event.text,
-            });
-            break;
-
-          case 'thinking':
-            dispatch({
-              type: 'thinking',
-              conversationId,
-              messageId: assistantId,
-              active: event.active,
-            });
-            break;
-
-          case 'display':
-            if (event.kind === 'figure') {
-              dispatch({
-                type: 'figure_show',
-                conversationId,
-                figure: event.payload as unknown as FigureSpec,
-              });
-            }
-            break;
-
-          case 'tool_status':
-            dispatch({
-              type: 'tool_status',
-              conversationId,
-              messageId: assistantId,
-              status: {
-                tool: event.tool,
-                label: event.label,
-                state: event.state,
-              },
-            });
-            break;
-
-          case 'turn_finished':
-            finishedByEvent = true;
-            dispatch({
-              type: 'turn_finished',
-              conversationId,
-              turnId: assistantId,
-              status: event.status,
-            });
-            break;
-
-          case 'error':
-            receivedError = true;
-            dispatch({
-              type: 'stream_notice',
-              conversationId,
-              messageId: assistantId,
-              notice: event.message.trim() !== ''
-                ? event.message
-                : '服务暂时出了点问题，请稍后再试。',
-            });
-            break;
-
-          case 'unknown':
-            console.warn('[ai4edu] 收到未知的流事件类型：', event.eventType);
-            break;
-
-          default:
-            break;
-        }
-
-        if (finishedByEvent) {
-          break;
-        }
-      }
-
-      if (!finishedByEvent) {
-        if (controller.signal.aborted) {
-          dispatch({
-            type: 'stream_notice',
-            conversationId,
-            messageId: assistantId,
-            notice: '已停止生成。',
-          });
-        } else if (!receivedError) {
-          dispatch({
-            type: 'stream_notice',
-            conversationId,
-            messageId: assistantId,
-            notice: '回答意外中断，请再试一次。',
-          });
-        }
-      }
-    } catch (error) {
-      if (controller.signal.aborted) {
-        dispatch({
-          type: 'stream_notice',
-          conversationId,
-          messageId: assistantId,
-          notice: '已停止生成。',
-        });
-      } else if (!isUnauthorized(error)) {
-        dispatch({
-          type: 'stream_notice',
-          conversationId,
-          messageId: assistantId,
-          notice: describeError(error, '网络连接中断，请检查网络后再试。'),
-        });
-      }
-    } finally {
-      endTurn();
-    }
-  }, [refreshConversations]);
-
-  const sendMessage = useCallback(async (
-    text: string,
-    attachmentIds: number[],
-  ): Promise<boolean> => {
-    if (sendingRef.current || creatingRef.current) {
-      return false;
-    }
-
-    let conversationId = stateRef.current.activeId;
-    if (conversationId === null) {
-      creatingRef.current = true;
-      try {
-        const created = await api.createConversation();
-        conversationId = created.id;
-        dispatch({ type: 'conversation_created', conversation: created });
-        navigate(`/c/${created.id}`, { replace: true });
-      } catch (error) {
-        if (!isUnauthorized(error)) {
-          dispatch({
-            type: 'error',
-            message: describeError(error, '创建对话失败，请稍后再试。'),
-          });
-        }
-        return false;
-      } finally {
-        creatingRef.current = false;
-      }
-    }
-
-    const now = new Date().toISOString();
-    const userMessage: DisplayMessage = {
-      id: nextTempId(),
-      role: 'user',
-      text,
-      attachments: attachmentIds.map((id) => ({
-        id,
-        url: `/api/attachments/${id}`,
-      })),
-      created_at: now,
-    };
-    const assistantMessage: DisplayMessage = {
-      id: nextTempId(),
-      role: 'assistant',
-      text: '',
-      attachments: [],
-      created_at: now,
-      streaming: true,
-      thinking: false,
-      toolStatus: null,
-      notice: null,
-      waitStartedAt: Date.now(),
-      hasImage: attachmentIds.length > 0,
-      figures: [],
-      // 回合开始事件到达前先按已有阶段给一个初值；后端告知真实阶段后再修正。
-      waitKind: waitKind(
-        stateRef.current.conversations.find((item) => item.id === conversationId)?.phase
-          ?? null,
-        attachmentIds.length > 0,
-      ),
-    };
-
-    dispatch({
-      type: 'send_start',
-      conversationId,
-      userMessage,
-      assistantMessage,
-    });
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    sendingRef.current = true;
-    void runTurn(conversationId, text, attachmentIds, assistantMessage.id, controller);
-    return true;
-  }, [navigate, runTurn]);
-
-  const stopGeneration = useCallback(() => {
-    const id = stateRef.current.activeId;
-    if (id !== null) {
-      void api.stopConversation(id).catch((error: unknown) => {
-        if (!isUnauthorized(error)) {
-          console.warn('[ai4edu] 停止生成请求失败：', error);
-        }
-      });
-    }
-    abortRef.current?.abort();
-  }, []);
-
-  const renameConversation = useCallback(async (id: number, title: string) => {
-    const trimmed = title.trim();
-    if (trimmed === '') {
-      return;
-    }
-    try {
-      await api.renameConversation(id, trimmed);
-      dispatch({ type: 'conversation_renamed', id, title: trimmed });
-    } catch (error) {
-      if (!isUnauthorized(error)) {
-        dispatch({
-          type: 'error',
-          message: describeError(error, '重命名失败，请稍后再试。'),
-        });
-      }
-    }
-  }, []);
-
+  const { markDone } = sending;
   const deleteConversation = useCallback(async (id: number) => {
-    try {
-      await api.deleteConversation(id);
-      const wasActive = stateRef.current.activeId === id;
-      dispatch({ type: 'conversation_deleted', id });
-      if (wasActive) {
-        navigate('/', { replace: true });
-      }
-    } catch (error) {
-      if (!isUnauthorized(error)) {
-        dispatch({
-          type: 'error',
-          message: describeError(error, '删除对话失败，请稍后再试。'),
-        });
-      }
+    const wasActive = stateRef.current.activeId === id;
+    const deletedId = await list.deleteConversation(id);
+    if (deletedId !== null && wasActive) {
+      markDone();
+      navigate('/', { replace: true });
     }
-  }, [navigate]);
+  }, [list.deleteConversation, markDone, navigate]);
 
   const clearError = useCallback(() => {
     dispatch({ type: 'clear_error' });
-  }, []);
-
-  const openFigure = useCallback((figure: FigureSpec) => {
-    const id = stateRef.current.activeId;
-    if (id !== null) {
-      dispatch({ type: 'figure_open', conversationId: id, figure });
-    }
-  }, []);
-
-  const closeFigure = useCallback(() => {
-    dispatch({ type: 'figure_close' });
-  }, []);
-
-  const toggleFigure = useCallback(() => {
-    dispatch({ type: 'figure_toggle' });
   }, []);
 
   const activeConversation = useMemo(
@@ -1003,20 +128,22 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       messages: state.messages,
       messagesLoading: state.messagesLoading,
       messagesError: state.messagesError,
-      sending: state.sending,
+      sending: sending.sending,
       error: state.error,
-      figure: state.figure,
-      figureOpen: state.figureOpen,
-      openFigure,
-      closeFigure,
-      toggleFigure,
-      activateConversation,
-      reloadConversation,
-      sendMessage,
-      stopGeneration,
-      renameConversation,
+      figure: figurePanel.figure,
+      figureOpen: figurePanel.figureOpen,
+      setFigure: figurePanel.setFigure,
+      setFigureOpen: figurePanel.setFigureOpen,
+      openFigure: figurePanel.openFigure,
+      closeFigure: figurePanel.closeFigure,
+      toggleFigure: figurePanel.toggleFigure,
+      activateConversation: stream.activateConversation,
+      reloadConversation: stream.reloadConversation,
+      sendMessage: stream.sendMessage,
+      stopGeneration: stream.stopGeneration,
+      renameConversation: list.renameConversation,
       deleteConversation,
-      refreshConversations,
+      refreshConversations: list.refresh,
       clearError,
     }),
     [
@@ -1026,21 +153,13 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
       state.messages,
       state.messagesLoading,
       state.messagesError,
-      state.sending,
       state.error,
-      state.figure,
-      state.figureOpen,
-      openFigure,
-      closeFigure,
-      toggleFigure,
       activeConversation,
-      activateConversation,
-      reloadConversation,
-      sendMessage,
-      stopGeneration,
-      renameConversation,
+      sending,
+      figurePanel,
+      stream,
+      list,
       deleteConversation,
-      refreshConversations,
       clearError,
     ],
   );
@@ -1055,4 +174,3 @@ export function useChat(): ChatContextValue {
   }
   return context;
 }
-

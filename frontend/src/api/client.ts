@@ -15,6 +15,11 @@ import type {
 
 const API_PREFIX = '/api';
 
+/** 附件图片的同源地址；上传响应缺省 url 时也用它兜底。 */
+export function attachmentUrl(id: number): string {
+  return `${API_PREFIX}/attachments/${id}`;
+}
+
 /** 统一的接口错误：status 为 0 表示网络层失败。 */
 export class ApiError extends Error {
   readonly status: number;
@@ -115,7 +120,7 @@ function normalizeAttachment(raw: unknown): MessageAttachment | null {
   }
   return {
     id,
-    url: asString(source.url) || `${API_PREFIX}/attachments/${id}`,
+    url: asString(source.url) || attachmentUrl(id),
   };
 }
 
@@ -199,7 +204,11 @@ interface RequestOptions extends RequestInit {
   skipAuthRedirect?: boolean;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+/**
+ * 发请求并返回原始 Response：
+ * 统一处理网络失败、非 2xx 错误解析与 401 通知，成功时把响应交给调用方。
+ */
+async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
   const { skipAuthRedirect = false, headers, ...init } = options;
   let response: Response;
   try {
@@ -222,6 +231,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
     throw apiError;
   }
+
+  return response;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await rawRequest(path, options);
 
   if (response.status === 204) {
     return undefined as T;
@@ -347,7 +362,7 @@ export async function uploadAttachment(
   }
   return {
     id,
-    url: asString(source.url) || `${API_PREFIX}/attachments/${id}`,
+    url: asString(source.url) || attachmentUrl(id),
   };
 }
 
@@ -359,32 +374,15 @@ export async function sendMessage(
   attachmentIds: number[],
   signal: AbortSignal,
 ): Promise<ReadableStream<Uint8Array>> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_PREFIX}/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/x-ndjson',
-      },
-      body: JSON.stringify({ text, attachment_ids: attachmentIds }),
-      signal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error;
-    }
-    throw new ApiError(0, '无法连接服务器，请检查网络后再试。');
-  }
-
-  if (!response.ok) {
-    const apiError = await parseErrorResponse(response);
-    if (response.status === 401) {
-      notifyUnauthorized();
-    }
-    throw apiError;
-  }
+  const response = await rawRequest(`/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/x-ndjson',
+    },
+    body: JSON.stringify({ text, attachment_ids: attachmentIds }),
+    signal,
+  });
 
   if (response.body === null) {
     throw new ApiError(response.status, '服务器没有返回回答，请重试。');
@@ -396,7 +394,7 @@ export async function stopConversation(conversationId: number): Promise<void> {
   await request<void>(`/conversations/${conversationId}/stop`, { method: 'POST' });
 }
 
-/** 诊断信息用，不展示给学生。 */
+/** 把接口错误转成学生可见的文案；不是 ApiError 时返回 fallback。 */
 export function describeError(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.message.trim() !== '') {
     return error.message;

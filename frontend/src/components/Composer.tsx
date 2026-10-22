@@ -30,13 +30,11 @@ export function Composer(): JSX.Element {
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
   const compositionEndedAtRef = useRef(0);
-  const submitLockRef = useRef(false);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
 
@@ -64,7 +62,6 @@ export function Composer(): JSX.Element {
   const canSend = !sending
     && !messagesLoading
     && !uploading
-    && !submitting
     && (text.trim() !== '' || readyIds.length > 0);
 
   async function startUpload(file: File): Promise<void> {
@@ -151,7 +148,7 @@ export function Composer(): JSX.Element {
   }
 
   async function handleSend(): Promise<void> {
-    if (!canSend || submitLockRef.current) {
+    if (!canSend) {
       return;
     }
     const ids = readyIds;
@@ -160,23 +157,17 @@ export function Composer(): JSX.Element {
       return;
     }
 
-    submitLockRef.current = true;
-    setSubmitting(true);
-    try {
-      const accepted = await sendMessage(trimmed, ids);
-      if (accepted) {
-        for (const item of attachmentsRef.current) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
-        attachmentsRef.current = [];
-        setText('');
-        setAttachments([]);
-        setError(null);
-        textareaRef.current?.focus();
+    // 连发防重由 useChat().sending（useSending 的单一锁）兜底。
+    const accepted = await sendMessage(trimmed, ids);
+    if (accepted) {
+      for (const item of attachmentsRef.current) {
+        URL.revokeObjectURL(item.previewUrl);
       }
-    } finally {
-      submitLockRef.current = false;
-      setSubmitting(false);
+      attachmentsRef.current = [];
+      setText('');
+      setAttachments([]);
+      setError(null);
+      textareaRef.current?.focus();
     }
   }
 
@@ -349,11 +340,7 @@ export function Composer(): JSX.Element {
                 disabled={!canSend}
                 aria-label="发送消息"
               >
-                {submitting ? (
-                  <span className="spinner spinner-on-primary" aria-hidden="true" />
-                ) : (
-                  <SendIcon size={17} />
-                )}
+                <SendIcon size={17} />
                 <span>发送</span>
               </button>
             )}

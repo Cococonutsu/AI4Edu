@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type MouseEvent,
 } from 'react';
-import { ApiError, updateMe } from '../api/client';
+import { ApiError } from '../api/client';
 import { useAuth } from '../state/auth';
 import { gradeLabel } from '../utils/format';
 import {
@@ -27,7 +27,7 @@ const GRADE_OPTIONS = Array.from(
 );
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Element | null {
-  const { user, updateUser } = useAuth();
+  const { user, saveSettings } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [grade, setGrade] = useState(GRADE_MIN);
   const [error, setError] = useState<string | null>(null);
@@ -82,8 +82,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Elem
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateMe(buildPayload(user, values));
-      updateUser(updated);
+      await saveSettings(buildPayload(user, values));
       onClose();
     } catch (requestError) {
       setError(

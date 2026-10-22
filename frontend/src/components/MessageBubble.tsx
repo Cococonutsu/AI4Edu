@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { attachmentUrl } from '../api/client';
 import type { FigureSpec } from '../api/types';
 import type { DisplayMessage, ToolDisplayStatus } from '../state/chat';
 import { useChat } from '../state/chat';
@@ -140,7 +141,7 @@ export function MessageBubble({ message }: { message: DisplayMessage }): JSX.Ele
         {message.attachments.length > 0 && (
           <div className="message-images">
             {message.attachments.map((attachment) => {
-              const src = `/api/attachments/${attachment.id}`;
+              const src = attachmentUrl(attachment.id);
               return (
                 <button
                   key={attachment.id}

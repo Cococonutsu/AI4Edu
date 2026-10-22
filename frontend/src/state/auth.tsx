@@ -13,8 +13,9 @@ import {
   login as apiLogin,
   logout as apiLogout,
   onUnauthorized,
+  updateMe as apiUpdateMe,
 } from '../api/client';
-import type { LoginCredentials, User } from '../api/types';
+import type { LoginCredentials, UpdateMePayload, User } from '../api/types';
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 
@@ -59,6 +60,8 @@ interface AuthContextValue {
   notice: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
+  /** 保存个人设置：提交修改并用后端返回的资料更新当前用户。 */
+  saveSettings: (payload: UpdateMePayload) => Promise<void>;
   /** 用后端返回的最新资料替换当前用户。 */
   updateUser: (user: User) => void;
   dismissNotice: () => void;
@@ -121,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     dispatch({ type: 'updated', user });
   }, []);
 
+  const saveSettings = useCallback(async (payload: UpdateMePayload) => {
+    const updated = await apiUpdateMe(payload);
+    dispatch({ type: 'updated', user: updated });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status: state.status,
@@ -128,10 +136,20 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       notice: state.notice,
       login,
       logout,
+      saveSettings,
       updateUser,
       dismissNotice,
     }),
-    [state.status, state.user, state.notice, login, logout, updateUser, dismissNotice],
+    [
+      state.status,
+      state.user,
+      state.notice,
+      login,
+      logout,
+      saveSettings,
+      updateUser,
+      dismissNotice,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
