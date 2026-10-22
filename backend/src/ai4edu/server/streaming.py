@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 from typing import Any
 
 from ai4edu.core.events import (
@@ -15,6 +16,14 @@ from ai4edu.core.events import (
     TurnFinished,
     TurnStarted,
 )
+
+
+class StartVerdict(Enum):
+    """一次任务登记的原子裁决结果。"""
+
+    STARTED = "started"
+    CONFLICT = "conflict"      # 同会话已在生成
+    LIMIT = "limit"            # 该用户同时生成数已达上限
 
 
 class RunRegistry:
@@ -40,12 +49,25 @@ class RunRegistry:
             if owner == user_id and not task.done()
         }
 
-    def start(self, conversation_id: int, user_id: int, task: asyncio.Task[Any]) -> bool:
+    def start(
+        self,
+        conversation_id: int,
+        user_id: int,
+        task: asyncio.Task[Any],
+        *,
+        max_per_user: int = 3,
+    ) -> StartVerdict:
+        """原子地裁决并登记：同会话冲突 / 超限 / 成功。
+
+        检查与登记在同一同步块内完成，中间无 await，不受并发插入影响。
+        """
         if self.is_running(conversation_id):
-            return False
+            return StartVerdict.CONFLICT
+        if len(self.running_for_user(user_id)) >= max_per_user:
+            return StartVerdict.LIMIT
         self._runs[conversation_id] = (user_id, task)
         task.add_done_callback(lambda done: self.finish(conversation_id, done))
-        return True
+        return StartVerdict.STARTED
 
     def finish(self, conversation_id: int, task: asyncio.Task[Any]) -> None:
         entry = self._runs.get(conversation_id)

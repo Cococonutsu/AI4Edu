@@ -7,14 +7,14 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai4edu.storage.models import Conversation, utcnow
+from ai4edu.storage.models import Conversation, DEFAULT_CONVERSATION_TITLE, utcnow
 
 
 async def create(
     session: AsyncSession,
     *,
     user_id: int,
-    title: str = "新对话",
+    title: str = DEFAULT_CONVERSATION_TITLE,
     phase: str = "idle",
     state_json: dict | None = None,
 ) -> Conversation:

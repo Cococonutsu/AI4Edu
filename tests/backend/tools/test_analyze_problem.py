@@ -70,7 +70,6 @@ async def _context(seed, db_session, tmp_path):
             grade_band=user.grade_band,
             role=user.role,
         ),
-        conversation_id=conversation_id,
         turn_id="turn-1",
         student_text="如图，求 k 的值。",
         state=TutorState.idle(),

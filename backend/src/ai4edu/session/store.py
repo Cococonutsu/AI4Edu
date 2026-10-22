@@ -12,7 +12,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai4edu.models.messages import Message
-from ai4edu.storage.models import Attachment, Conversation, Problem
+from ai4edu.storage.models import DEFAULT_CONVERSATION_TITLE, Attachment, Conversation, Problem
 from ai4edu.storage.repos import (
     attachments as attachments_repo,
 )
@@ -56,6 +56,14 @@ class TurnStore:
     async def get_conversation(self) -> Conversation | None:
         return await conversations_repo.get(
             self._db, self.conversation_id, self.user_id
+        )
+
+    async def is_default_title(self) -> bool:
+        """会话标题是否还是默认的"新对话"（首回合应替换）。"""
+        conversation = await self.get_conversation()
+        return (
+            conversation is not None
+            and conversation.title == DEFAULT_CONVERSATION_TITLE
         )
 
     async def update_title(self, title: str) -> None:

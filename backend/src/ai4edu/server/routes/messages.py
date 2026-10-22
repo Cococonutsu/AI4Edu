@@ -23,7 +23,7 @@ from ai4edu.core.events import AgentError, AgentEvent, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
 from ai4edu.models.contracts import StudentProfile
 from ai4edu.prompts import Reminders
-from ai4edu.server.streaming import event_to_json, runs
+from ai4edu.server.streaming import StartVerdict, event_to_json, runs
 from ai4edu.storage.db import async_session, get_session
 from ai4edu.storage.models import User
 from ai4edu.storage.repos import attachments, conversations
@@ -161,16 +161,7 @@ async def create_message(
     # 一直占着读事务；引擎在后台任务里使用自己的会话。
     await session.close()
 
-    if runs.is_running(conversation_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_RUNNING_CONFLICT
-        )
     limit = max(1, get_settings().max_concurrent_runs_per_user)
-    if len(runs.running_for_user(user.id)) >= limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=_TOO_MANY_RUNS.format(limit=limit),
-        )
 
     queue: "asyncio.Queue[AgentEvent | None]" = asyncio.Queue()
     engine = get_engine()
@@ -184,8 +175,14 @@ async def create_message(
             attachment_ids=attachment_ids,
         )
     )
-    if not runs.start(conversation_id, user.id, task):
+    verdict = runs.start(conversation_id, user.id, task, max_per_user=limit)
+    if verdict is not StartVerdict.STARTED:
         task.cancel()
+        if verdict is StartVerdict.LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_TOO_MANY_RUNS.format(limit=limit),
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=_RUNNING_CONFLICT
         )

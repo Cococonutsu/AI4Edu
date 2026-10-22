@@ -15,7 +15,7 @@ from ai4edu.server.schemas import (
 from ai4edu.server.serializers import visible_messages
 from ai4edu.server.streaming import runs
 from ai4edu.storage.db import get_session
-from ai4edu.storage.models import User
+from ai4edu.storage.models import DEFAULT_CONVERSATION_TITLE, User
 from ai4edu.storage.repos import conversations, messages
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -51,7 +51,7 @@ async def create_conversation(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ConversationOut:
-    title = (payload.title if payload and payload.title else None) or "新对话"
+    title = (payload.title if payload and payload.title else None) or DEFAULT_CONVERSATION_TITLE
     conversation = await conversations.create(session, user_id=user.id, title=title)
     return ConversationOut.model_validate(conversation)
 

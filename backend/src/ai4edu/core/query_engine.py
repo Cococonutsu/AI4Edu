@@ -272,7 +272,7 @@ class QueryEngine:
         await store.link_attachments(ids)
         await store.commit()
 
-        if conversation.title == "新对话":
+        if await store.is_default_title():
             title = text.strip()[:20] or "图片题目"
             await store.update_title(title)
             await store.commit()
@@ -308,10 +308,8 @@ class QueryEngine:
             config=self._config,
             reminders=self._reminders,
             user=user,
-            conversation_id=conversation_id,
             turn_id=turn_id,
             student_text=text,
-            attachment_ids=ids,
             user_message_id=rows[0].db_id,
             state=state,
             problem=problem,

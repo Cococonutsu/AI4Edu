@@ -69,6 +69,10 @@ class AuthSession(Base):
     user: Mapped[User] = relationship(back_populates="auth_sessions")
 
 
+# 未命名会话的默认标题。学生在会话里发的第一条消息会替换它。
+DEFAULT_CONVERSATION_TITLE = "新对话"
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
@@ -76,7 +80,7 @@ class Conversation(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default=DEFAULT_CONVERSATION_TITLE)
     phase: Mapped[str] = mapped_column(String(16), nullable=False, default="idle")
     state_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

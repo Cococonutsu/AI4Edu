@@ -13,12 +13,11 @@ from ai4edu.server.schemas import LoginRequest, UpdateMeRequest, UserOut
 from ai4edu.storage.db import get_session
 from ai4edu.storage.models import User
 from ai4edu.storage.repos import users
-from ai4edu.tutoring.framework import grade_band_for
+from ai4edu.utils.errors import ConfigError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _INVALID_CREDENTIALS = "用户名或密码错误"
-_MAX_DISPLAY_NAME_LENGTH = 32
 
 
 @router.post("/login", response_model=UserOut)
@@ -85,39 +84,15 @@ async def update_me(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> UserOut:
-    """修改当前用户的名字和/或年级；用户名、角色等其他字段不接受修改。"""
+    """修改当前用户的名字和/或年级；业务规则在 users repo。"""
 
-    if payload.display_name is None and payload.grade is None:
-        raise HTTPException(
-            status_code=422,
-            detail="请至少提供名字或年级",
+    try:
+        updated = await users.update_profile(
+            session,
+            user,
+            display_name=payload.display_name,
+            grade=payload.grade,
         )
-
-    new_display_name: str | None = None
-    if payload.display_name is not None:
-        new_display_name = payload.display_name.strip()
-        if not new_display_name:
-            raise HTTPException(
-                status_code=422,
-                detail="名字不能为空",
-            )
-        if len(new_display_name) > _MAX_DISPLAY_NAME_LENGTH:
-            raise HTTPException(
-                status_code=422,
-                detail="名字不能超过 32 个字符",
-            )
-
-    if payload.grade is not None and not 1 <= payload.grade <= 12:
-        raise HTTPException(
-            status_code=422,
-            detail="年级必须是 1–12 的整数",
-        )
-
-    if new_display_name is not None:
-        user.display_name = new_display_name
-    if payload.grade is not None:
-        user.grade = payload.grade
-        user.grade_band = grade_band_for(payload.grade)
-
-    await session.commit()
-    return UserOut.model_validate(user)
+    except ConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return UserOut.model_validate(updated)

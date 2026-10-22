@@ -44,10 +44,8 @@ class ToolContext:
     config: TutoringConfig
     reminders: Reminders
     user: StudentProfile
-    conversation_id: int
     turn_id: str
     student_text: str
-    attachment_ids: list[int] = field(default_factory=list)
     user_message_id: int | None = None
     state: TutorState = field(default_factory=lambda: TutorState.idle())
     problem: ProblemModel | None = None

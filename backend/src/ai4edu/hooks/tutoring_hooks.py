@@ -50,6 +50,9 @@ def choose_step_mode(facts: TurnFacts) -> tuple[ThinkingMode, ToolChoice]:
 
     if facts.step <= 1:
         return "on", _TOOL_CHOICE
+    if facts.last_step_tool_error:
+        # 上一步工具报错，模型需要推理来修正参数，保持开思考。
+        return "on", _TOOL_CHOICE
     if facts.has_diagnosis or facts.has_analyze or facts.has_figure:
         return "off", _TOOL_CHOICE
     return "on", _TOOL_CHOICE
