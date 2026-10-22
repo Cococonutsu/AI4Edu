@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatElapsed, waitKind, waitStage } from '../../frontend/src/utils/waiting';
+import {
+  formatElapsed,
+  toolRunningNote,
+  waitKind,
+  waitStage,
+} from '../../frontend/src/utils/waiting';
 
 describe('waitKind', () => {
   it('带图一律按读题处理', () => {
@@ -46,5 +51,22 @@ describe('formatElapsed', () => {
 
   it('负数按 0 处理', () => {
     expect(formatElapsed(-500)).toBe('已等 0 秒');
+  });
+});
+
+
+describe('toolRunningNote', () => {
+  it('联网搜索给一句同风格的补充提示', () => {
+    expect(toolRunningNote('web_search')).toBe('老师上网查资料去了，稍等一下。');
+  });
+
+  it('读网页给一句同风格的补充提示', () => {
+    expect(toolRunningNote('web_fetch')).toBe('老师在读网页，有时要多等几秒。');
+  });
+
+  it('其它工具没有补充提示', () => {
+    expect(toolRunningNote('analyze_problem')).toBeNull();
+    expect(toolRunningNote('record_diagnosis')).toBeNull();
+    expect(toolRunningNote('draw_figure')).toBeNull();
   });
 });

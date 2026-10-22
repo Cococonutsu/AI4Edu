@@ -90,6 +90,22 @@ export function waitStage(kind: WaitKind, elapsedMs: number): WaitStage {
   return { label: current.label, note: current.note };
 }
 
+/**
+ * 工具运行期间的一句补充提示；没有对应提示的工具返回 null。
+ *
+ * 联网搜索/读网页是仅有的两段"老师离开了一下"的等待（对外请求，
+ * 秒级到十几秒），给一句和阶段文案同风格的说明，避免干等。
+ */
+export function toolRunningNote(tool: string): string | null {
+  if (tool === 'web_search') {
+    return '老师上网查资料去了，稍等一下。';
+  }
+  if (tool === 'web_fetch') {
+    return '老师在读网页，有时要多等几秒。';
+  }
+  return null;
+}
+
 /** "已等 12 秒" / "已等 1 分 05 秒"。 */
 export function formatElapsed(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));

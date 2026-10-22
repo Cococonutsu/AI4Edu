@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ai4edu.tools.base import BaseTool, ToolContext, ToolResult
-from ai4edu.tools.web.client import WebToolsError
+from ai4edu.utils.errors import WebToolsError
 
 _MAX_URL_LENGTH = 8192
 _MAX_CONTENT_LENGTH = 20_000
@@ -24,7 +24,7 @@ def _invalid(ctx: ToolContext, reason: str) -> ToolResult:
             "bad_tool_arguments", error=reason, name=WebFetchTool.name
         ),
         is_error=True,
-        status_label="读取失败",
+        status_label="链接不对",
     )
 
 
@@ -34,7 +34,7 @@ class WebFetchTool(BaseTool):
         "读取一个网页的正文（Markdown）。搜索结果摘要不够、需要完整内容时"
         "抓取其中一两个链接。结果只有你可见。"
     )
-    running_label = "正在读取网页"
+    running_label = "正在读网页…"
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -76,7 +76,7 @@ class WebFetchTool(BaseTool):
             return ToolResult(
                 content=ctx.reminders.text("web_tools_unavailable"),
                 is_error=True,
-                status_label="联网不可用",
+                status_label="查资料未开通",
             )
 
         try:
@@ -85,7 +85,7 @@ class WebFetchTool(BaseTool):
             return ToolResult(
                 content=ctx.reminders.text("web_fetch_failed", error=str(exc)),
                 is_error=True,
-                status_label="网页读取失败",
+                status_label="读网页失败",
             )
 
         body = page.content
@@ -99,7 +99,7 @@ class WebFetchTool(BaseTool):
             "\n\n"
             + ctx.reminders.text("after_web_fetch")
         )
-        return ToolResult(content=content, status_label="网页已读取")
+        return ToolResult(content=content, status_label="网页读好了")
 
 
 web_fetch = WebFetchTool()

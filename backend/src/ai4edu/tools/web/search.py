@@ -12,7 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 from ai4edu.tools.base import BaseTool, ToolContext, ToolResult
-from ai4edu.tools.web.client import WebSearchHit, WebToolsError
+from ai4edu.tools.web.client import WebSearchHit
+from ai4edu.utils.errors import WebToolsError
 
 _MAX_QUERY_LENGTH = 128
 _DEFAULT_COUNT = 5
@@ -26,7 +27,7 @@ def _invalid(ctx: ToolContext, reason: str) -> ToolResult:
             "bad_tool_arguments", error=reason, name=WebSearchTool.name
         ),
         is_error=True,
-        status_label="搜索失败",
+        status_label="搜索词不对",
     )
 
 
@@ -49,7 +50,7 @@ class WebSearchTool(BaseTool):
         "联网搜索，核实事实或查课本外的真实世界信息（年份、时事、数据等）。"
         "结果只有你可见。课本内的数学知识与计算不要搜索，自己完成。"
     )
-    running_label = "正在联网搜索"
+    running_label = "正在上网查资料…"
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -92,7 +93,7 @@ class WebSearchTool(BaseTool):
             return ToolResult(
                 content=ctx.reminders.text("web_tools_unavailable"),
                 is_error=True,
-                status_label="联网搜索不可用",
+                status_label="查资料未开通",
             )
 
         try:
@@ -101,7 +102,7 @@ class WebSearchTool(BaseTool):
             return ToolResult(
                 content=ctx.reminders.text("web_search_failed", error=str(exc)),
                 is_error=True,
-                status_label="联网搜索失败",
+                status_label="查资料失败",
             )
 
         if not hits:
@@ -110,7 +111,7 @@ class WebSearchTool(BaseTool):
                     f"联网搜索「{query}」没有找到相关结果。"
                     "可以换更短、更具体的关键词重试，或基于课本知识继续辅导。"
                 ),
-                status_label="没有找到结果",
+                status_label="没有查到资料",
             )
 
         blocks = [
@@ -126,7 +127,7 @@ class WebSearchTool(BaseTool):
         )
         return ToolResult(
             content=content,
-            status_label=f"已搜索到 {len(hits)} 条结果",
+            status_label=f"查到了 {len(hits)} 条资料",
         )
 
 

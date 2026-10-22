@@ -36,12 +36,12 @@ from ai4edu.models.contracts import (
     ModelTextDelta,
     ModelThinkingDelta,
     ModelUsage,
-    ProviderError,
     ToolSchema,
     ToolUse,
     ToolUseReady,
     Usage,
 )
+from ai4edu.utils.errors import ProviderError
 from ai4edu.models.content import (
     ImageBlock,
     InlineImageBlock,
@@ -193,12 +193,31 @@ def _tool_schema_to_wire(schema: ToolSchema) -> dict[str, Any]:
     }
 
 
+def _cached_tokens_of(usage: Any) -> int:
+    """各厂商报告缓存命中的字段名不同，逐个尝试。
+
+    OpenAI 风格在 `prompt_tokens_details.cached_tokens`；DeepSeek 是
+    `prompt_cache_hit_tokens`；个别实现直接叫 `cached_tokens`。
+    """
+    details = getattr(usage, "prompt_tokens_details", None)
+    if details is not None:
+        value = getattr(details, "cached_tokens", None)
+        if value:
+            return int(value)
+    for field in ("prompt_cache_hit_tokens", "cached_tokens"):
+        value = getattr(usage, field, None)
+        if value:
+            return int(value)
+    return 0
+
+
 def _usage_from_response(usage: Any) -> Usage:
     if usage is None:
         return Usage()
     return Usage(
         input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
         output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+        cached_tokens=_cached_tokens_of(usage),
     )
 
 
@@ -321,7 +340,11 @@ class OpenAICompatProvider:
 
         if pending:
             yield ToolUseReady(calls=_parse_tool_uses(pending))
-        yield ModelUsage(input_tokens=usage.input_tokens, output_tokens=usage.output_tokens)
+        yield ModelUsage(
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cached_tokens=usage.cached_tokens,
+        )
         yield ModelStreamEnd(finish_reason=finish_reason)
 
     async def complete(self, request: ModelRequest) -> ModelResponse:

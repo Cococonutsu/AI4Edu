@@ -67,7 +67,7 @@ async def test_init_db_adds_missing_columns_to_existing_table(
     finally:
         await engine.dispose()
 
-    assert {"step", "thinking"} <= columns
+    assert {"step", "thinking", "cached_tokens"} <= columns
     assert rows == [(1, "tutor", "glm-5.3-flash")]
 
 

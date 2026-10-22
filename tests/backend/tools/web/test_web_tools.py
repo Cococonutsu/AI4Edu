@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from ai4edu.prompts import load_reminders
+from ai4edu.prompts import Reminders
 from ai4edu.tools.registry import build_registry
-from ai4edu.tools.web.client import WebFetchPage, WebSearchHit, WebToolsError
+from ai4edu.tools.web.client import WebFetchPage, WebSearchHit
+from ai4edu.utils.errors import WebToolsError
 from ai4edu.tools.web.fetch import web_fetch
 from ai4edu.tools.web.search import web_search
 from ai4edu.tutoring.state import Phase
@@ -17,12 +17,11 @@ from fakes import FakeWebTools
 
 pytestmark = pytest.mark.asyncio
 
-CONFIG_DIR = Path(__file__).resolve().parents[4] / "config"
 
 
 @pytest.fixture(scope="module")
 def reminders():
-    return load_reminders(CONFIG_DIR)
+    return Reminders()
 
 
 def _ctx(reminders, web):
@@ -136,7 +135,7 @@ async def test_search_success_formats_results_for_the_model(reminders):
 
     assert result.is_error is False
     assert result.display is None
-    assert result.status_label == "已搜索到 2 条结果"
+    assert result.status_label == "查到了 2 条资料"
     assert fake.searches == [("勾股定理", 2)]
     content = result.content
     assert content.startswith(
@@ -226,7 +225,7 @@ async def test_fetch_success_returns_page_content(reminders):
 
     assert result.is_error is False
     assert result.display is None
-    assert result.status_label == "网页已读取"
+    assert result.status_label == "网页读好了"
     assert fake.fetched == ["https://example.com/a"]
     content = result.content
     assert content.startswith("已读取网页「某页面」（只有老师可见）：\n\n")

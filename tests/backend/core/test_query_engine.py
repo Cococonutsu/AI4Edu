@@ -13,7 +13,7 @@ from ai4edu.core.events import AgentError, TextDelta, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
 from ai4edu.models.content import TextBlock, ToolResultBlock, ToolUseBlock
 from ai4edu.models.messages import Message, validate_messages
-from ai4edu.prompts import load_reminders
+from ai4edu.prompts import Reminders
 from ai4edu.storage.repos import llm_calls as llm_calls_repo
 from ai4edu.storage.repos import problems
 from ai4edu.tools.base import ToolResult
@@ -61,7 +61,7 @@ def config():
 
 @pytest.fixture(scope="module")
 def reminders():
-    return load_reminders(CONFIG_DIR)
+    return Reminders()
 
 
 @pytest.fixture
@@ -196,6 +196,9 @@ async def test_reminder_after_text_already_sent(
     last_message = provider.messages(1)[-1]
     assert last_message.role == "user"
     assert "已经对学生说过" in _text_of(last_message)
+    # 系统提醒统一以 <system-reminder> 标签出现（提示词声明防伪造）。
+    assert _text_of(last_message).startswith("<system-reminder>")
+    assert _text_of(last_message).endswith("</system-reminder>")
 
 
 async def test_point_question_reply_streams_without_tools(
@@ -440,6 +443,7 @@ async def test_thinking_turns_off_after_diagnosis_and_steps_are_logged(
         (1, "on"),
         (2, "off"),
     ]
+    assert all(row.cached_tokens == 0 for row in tutor_rows)
 
 
 async def test_tutor_requests_enough_tokens(

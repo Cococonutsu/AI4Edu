@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FigureSpec } from '../api/types';
 import type { DisplayMessage, ToolDisplayStatus } from '../state/chat';
 import { useChat } from '../state/chat';
-import { formatElapsed, waitStage } from '../utils/waiting';
+import { formatElapsed, toolRunningNote, waitStage } from '../utils/waiting';
 import { AlertIcon, CheckIcon, ShapeIcon } from './Icons';
 import { ImageLightbox } from './ImageLightbox';
 import { MarkdownContent } from './MarkdownContent';
@@ -53,7 +53,11 @@ function WaitingStatus({
 }): JSX.Element {
   const kind = message.waitKind ?? 'idle';
   const stage = waitStage(kind, elapsedMs);
-  const tool: ToolDisplayStatus | null = message.toolStatus ?? null;
+  const rawTool: ToolDisplayStatus | null = message.toolStatus ?? null;
+  const tool: (ToolDisplayStatus & { note: string | null }) | null =
+    rawTool === null
+      ? null
+      : { ...rawTool, note: toolRunningNote(rawTool.tool) };
   const toolRunning = tool?.state === 'running';
   const toolDone = tool?.state === 'done';
 
@@ -74,6 +78,10 @@ function WaitingStatus({
         </span>
         <span className="waiting-elapsed">{formatElapsed(elapsedMs)}</span>
       </div>
+
+      {toolRunning && tool.note !== null && (
+        <div className="waiting-sub">{tool.note}</div>
+      )}
 
       {toolDone && <div className="waiting-sub">{stage.label}</div>}
 

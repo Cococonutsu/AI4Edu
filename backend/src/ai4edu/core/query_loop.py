@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, Protocol, TypeAlias
 
 from ai4edu.core.events import (
@@ -26,12 +26,12 @@ from ai4edu.core.events import (
     ToolDisplay,
     ToolStatus,
 )
+from ai4edu.utils.errors import LoopFailure, ProviderError
 from ai4edu.models.contracts import (
     ModelEvent,
     ModelStreamEnd,
     ModelTextDelta,
     ModelThinkingDelta,
-    ProviderError,
     ThinkingMode,
     ToolChoice,
     ToolSchema,
@@ -53,6 +53,9 @@ class StepRequest:
     tools: list[ToolSchema]
     thinking: ThinkingMode
     tool_choice: ToolChoice
+    # 本步的输出上限；None 用引擎默认。截断恢复时由循环提升（见
+    # `_ESCALATED_MAX_TOKENS`）。
+    max_tokens: int | None = None
 
 
 CallModel = Callable[[StepRequest], AsyncIterator[ModelEvent]]
@@ -105,27 +108,17 @@ class LoopHooks(Protocol):
 
     def after_step(self, *, has_tool_calls: bool, sent_text: bool) -> StepDecision: ...
 
+    def on_truncated(self) -> Message:
+        """正文被长度截断、学生已看到部分内容时，返回"继续说完"的提醒。"""
+        ...
 
-LoopFailureReason = Literal[
-    "provider_error",  # 不可恢复的模型调用失败
-    "network_error",  # 可恢复错误重试耗尽（或正文已下发无法重试）
-    "max_steps",  # 达到步数上限
-    "guard",  # 回合守卫放弃（error_text 为学生可见文字）
-]
-
-
-class LoopFailure(Exception):
-    """循环无法继续。reason 由引擎映射成学生可见的错误提示。"""
-
-    def __init__(
-        self, reason: LoopFailureReason, message: str | None = None
-    ) -> None:
-        super().__init__(message or reason)
-        self.reason = reason
-        self.message = message
 
 
 _RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0)
+
+# 输出被长度截断（finish_reason == "length"）时的恢复：逐级加大输出额度，
+# 最多恢复两次；额度用尽后按普通结果处理（对齐 cc 的 escalate 策略）。
+_ESCALATED_MAX_TOKENS: tuple[int, ...] = (32768, 65536)
 
 
 async def query_loop(
@@ -139,6 +132,9 @@ async def query_loop(
     """运行一个学生回合。生成器正常结束表示回合完成。"""
 
     reminder: Message | None = None
+    # 截断恢复状态：当前输出额度（None=引擎默认）与已用掉的恢复次数。
+    current_max_tokens: int | None = None
+    length_recoveries = 0
 
     for step in range(1, max_steps + 1):
         plan = hooks.before_step(step)
@@ -152,6 +148,7 @@ async def query_loop(
             tools=plan.tools,
             thinking=plan.thinking,
             tool_choice=plan.tool_choice,
+            max_tokens=current_max_tokens,
         )
 
         thinking_parts: list[str] = []
@@ -161,6 +158,7 @@ async def query_loop(
         content_started = False
 
         attempts = 0
+        truncated = False
         while True:
             try:
                 async for event in call_model(step_request):
@@ -177,7 +175,29 @@ async def query_loop(
                         yield TextDelta(event.text)
                     elif isinstance(event, ToolUseReady):
                         tool_uses = list(event.calls)
-                    # ModelUsage / ModelStreamEnd 的计量由 call_model 侧记录。
+                    elif isinstance(event, ModelStreamEnd):
+                        truncated = event.finish_reason == "length"
+                    # ModelUsage 的计量由 call_model 侧记录。
+                # 输出被截断且这一步什么都没拿到（没有正文、工具参数不完整）：
+                # 学生什么都没看到，丢弃这次尝试、加大输出额度原样重试，
+                # 不占步数预算。
+                usable_calls = [use for use in tool_uses if use.input is not None]
+                if truncated and not text_parts and not usable_calls:
+                    if length_recoveries < len(_ESCALATED_MAX_TOKENS):
+                        length_recoveries += 1
+                        current_max_tokens = _ESCALATED_MAX_TOKENS[
+                            length_recoveries - 1
+                        ]
+                        step_request = replace(
+                            step_request, max_tokens=current_max_tokens
+                        )
+                        thinking_parts = []
+                        text_parts = []
+                        tool_uses = []
+                        thinking_active = False
+                        content_started = False
+                        truncated = False
+                        continue
                 break
             except ProviderError as exc:
                 # 已有正文下发时不能原步重试（会重复发给学生），直接结束。
@@ -273,6 +293,15 @@ async def query_loop(
         reminder = decision.reminder
         if decision.action == "retry":
             continue
+        if truncated and length_recoveries < len(_ESCALATED_MAX_TOKENS):
+            # 截断恢复：本回合后续调用逐级加大输出额度（对齐 cc 的 escalate）。
+            length_recoveries += 1
+            current_max_tokens = _ESCALATED_MAX_TOKENS[length_recoveries - 1]
+            if not tool_uses and text_parts:
+                # 正文被截断、学生已看到部分内容：不结束回合，
+                # 提醒模型从中断处继续说完（提醒不持久化）。
+                reminder = hooks.on_truncated()
+                continue
         if not tool_uses:
             return
 

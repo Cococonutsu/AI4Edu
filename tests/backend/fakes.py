@@ -22,12 +22,12 @@ from ai4edu.models.contracts import (
     ModelTextDelta,
     ModelThinkingDelta,
     ModelUsage,
-    ProviderError,
     ToolUse,
     ToolUseReady,
     Usage,
 )
-from ai4edu.tools.web.client import WebFetchPage, WebSearchHit, WebToolsError
+from ai4edu.tools.web.client import WebFetchPage, WebSearchHit
+from ai4edu.utils.errors import ProviderError, WebToolsError
 
 
 def _as_parts(value: list[str] | str | None) -> list[str]:
@@ -54,6 +54,7 @@ class FakeResponse:
     content: str | None = None
     input_tokens: int = 11
     output_tokens: int = 7
+    cached_tokens: int = 0
 
 
 def _delta(
@@ -147,6 +148,9 @@ def _stream_chunks(response: FakeResponse) -> list[SimpleNamespace]:
             usage=SimpleNamespace(
                 prompt_tokens=response.input_tokens,
                 completion_tokens=response.output_tokens,
+                prompt_tokens_details=SimpleNamespace(
+                    cached_tokens=response.cached_tokens
+                ),
             ),
         )
     )
@@ -185,6 +189,9 @@ class FakeLLMClient:
             usage=SimpleNamespace(
                 prompt_tokens=response.input_tokens,
                 completion_tokens=response.output_tokens,
+                prompt_tokens_details=SimpleNamespace(
+                    cached_tokens=response.cached_tokens
+                ),
             ),
         )
 

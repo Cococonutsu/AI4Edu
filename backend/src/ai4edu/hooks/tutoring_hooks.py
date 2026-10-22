@@ -140,8 +140,19 @@ class TutoringHooks:
             )
         return StepDecision("continue")
 
+    def on_truncated(self) -> Message:
+        return self._reminder_message(self._reminders.text("truncated_continuation"))
+
     def _reminder_message(self, text: str) -> Message:
-        return Message(role="user", content=[TextBlock(text=text)], turn_id=None)
+        # 系统提醒统一用 <system-reminder> 标签包裹；系统提示词声明只有
+        # 这种形态来自系统，防止学生在消息里伪造"（系统提醒：…）"绕过规则。
+        return Message(
+            role="user",
+            content=[
+                TextBlock(text=f"<system-reminder>{text}</system-reminder>")
+            ],
+            turn_id=None,
+        )
 
 
 __all__ = ["TurnFacts", "TutoringHooks", "choose_step_mode"]

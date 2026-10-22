@@ -11,9 +11,9 @@ import pytest
 from ai4edu.api.glm import GLMProvider
 from ai4edu.models.contracts import (
     ModelRequest,
-    ProviderError,
     ToolSchema,
 )
+from ai4edu.utils.errors import ProviderError
 from ai4edu.models.content import (
     ImageBlock,
     TextBlock,

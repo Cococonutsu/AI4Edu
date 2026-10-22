@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from ai4edu.prompts import load_reminders
+from ai4edu.prompts import Reminders
 from ai4edu.prompts.builder import build_system_prompt
 from ai4edu.tutoring.decision import Decision
 from ai4edu.tutoring.framework import load_config
@@ -254,9 +254,9 @@ def test_diagnosis_criteria_follow_config_changes(tmp_path: Path):
 
 
 def test_reminders_format_missing_placeholder_raises():
-    from ai4edu.tutoring.framework import ConfigError
+    from ai4edu.utils.errors import ConfigError
 
-    reminders = load_reminders(CONFIG_DIR)
+    reminders = Reminders()
 
     with pytest.raises(ConfigError):
         reminders.text("bad_tool_arguments")  # 缺 {error}、{name} 取值

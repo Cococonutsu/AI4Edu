@@ -21,7 +21,7 @@ from ai4edu.auth.deps import current_user
 from ai4edu.config import get_settings
 from ai4edu.core.events import AgentError, AgentEvent, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
-from ai4edu.prompts import load_reminders
+from ai4edu.prompts import Reminders
 from ai4edu.server.streaming import event_to_json, runs
 from ai4edu.storage.db import get_session
 from ai4edu.storage.models import User
@@ -54,7 +54,7 @@ class SendMessageRequest(BaseModel):
 def get_engine() -> QueryEngine:
     settings = get_settings()
     config = load_config(settings.config_dir)
-    reminders = load_reminders(settings.config_dir)
+    reminders = Reminders()
     return QueryEngine(settings=settings, config=config, reminders=reminders)
 
 

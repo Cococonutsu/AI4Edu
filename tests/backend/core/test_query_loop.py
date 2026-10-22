@@ -16,7 +16,12 @@ from ai4edu.core.query_loop import (
     ToolOutcome,
     query_loop,
 )
-from ai4edu.models.contracts import ModelTextDelta, ProviderError
+from ai4edu.models.contracts import (
+    ModelStreamEnd,
+    ModelTextDelta,
+    ModelThinkingDelta,
+)
+from ai4edu.utils.errors import ProviderError
 from ai4edu.models.content import TextBlock
 from ai4edu.models.messages import Message
 
@@ -37,6 +42,9 @@ class _Hooks:
 
     def after_step(self, *, has_tool_calls: bool, sent_text: bool) -> StepDecision:
         return StepDecision("continue")
+
+    def on_truncated(self) -> Message:
+        return Message(role="user", content=[TextBlock(text="（继续说完）")])
 
 
 class _Runner:
@@ -170,3 +178,95 @@ async def test_max_steps_raises_loop_failure(no_sleep):
         await _run(steps)
 
     assert info.value.reason == "max_steps"
+
+
+async def test_pure_truncation_is_retried_with_escalated_max_tokens():
+    """截断时这一步什么都没拿到（只有思考/坏参数）：加大额度原步重试。"""
+
+    requests_seen: list[Any] = []
+    script: list[Any] = [
+        [ModelThinkingDelta(text="想了一半"), ModelStreamEnd(finish_reason="length")],
+        [ModelTextDelta(text="完整的回答"), ModelStreamEnd(finish_reason="stop")],
+    ]
+
+    async def call_model(step_request) -> AsyncIterator[Any]:
+        requests_seen.append(step_request)
+        for event in script.pop(0):
+            yield event
+
+    events = []
+    generator = query_loop(
+        messages=[Message(role="user", content=[TextBlock(text="题目")])],
+        call_model=call_model,
+        tools=_Runner(),
+        hooks=_Hooks(),
+        max_steps=8,
+    )
+    async for event in generator:
+        events.append(event)
+
+    # 第一次用默认额度，第二次已升级到 32768，且仍是第 1 步（不占步数）。
+    assert requests_seen[0].max_tokens is None
+    assert requests_seen[1].max_tokens == 32768
+    assert [r.step for r in requests_seen] == [1, 1]
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "完整的回答"
+
+
+async def test_truncated_text_continues_after_reminder():
+    """正文被截断、学生已看到部分：追加续写提醒继续，不结束回合。"""
+
+    requests_seen: list[Any] = []
+    script: list[Any] = [
+        [ModelTextDelta(text="前半段"), ModelStreamEnd(finish_reason="length")],
+        [ModelTextDelta(text="，后半段"), ModelStreamEnd(finish_reason="stop")],
+    ]
+
+    async def call_model(step_request) -> AsyncIterator[Any]:
+        requests_seen.append(step_request)
+        for event in script.pop(0):
+            yield event
+
+    events = []
+    generator = query_loop(
+        messages=[Message(role="user", content=[TextBlock(text="题目")])],
+        call_model=call_model,
+        tools=_Runner(),
+        hooks=_Hooks(),
+        max_steps=8,
+    )
+    async for event in generator:
+        events.append(event)
+
+    text = "".join(e.text for e in events if isinstance(e, TextDelta))
+    assert text == "前半段，后半段"
+    # 第二次请求：额度已升级，且最后一条消息是"继续说完"的提醒。
+    assert requests_seen[1].max_tokens == 32768
+    last = requests_seen[1].messages[-1]
+    assert last.role == "user"
+    assert "继续说完" in last.content[0].text
+
+
+async def test_length_recovery_is_capped():
+    """恢复额度用尽后照常结束回合，不会无限续写。"""
+
+    requests_seen: list[Any] = []
+
+    async def call_model(step_request) -> AsyncIterator[Any]:
+        requests_seen.append(step_request)
+        yield ModelTextDelta(text="还在写")
+        yield ModelStreamEnd(finish_reason="length")
+
+    events = []
+    generator = query_loop(
+        messages=[Message(role="user", content=[TextBlock(text="题目")])],
+        call_model=call_model,
+        tools=_Runner(),
+        hooks=_Hooks(),
+        max_steps=8,
+    )
+    async for event in generator:
+        events.append(event)
+
+    # 一次原始调用 + 两次续写恢复，之后接受截断、正常结束。
+    assert len(requests_seen) == 3
+    assert [r.max_tokens for r in requests_seen] == [None, 32768, 65536]

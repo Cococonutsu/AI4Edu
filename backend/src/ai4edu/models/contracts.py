@@ -26,14 +26,6 @@ class ToolSchema:
     input_schema: dict[str, Any]
 
 
-class ProviderError(Exception):
-    """模型调用失败。`recoverable=True` 表示可以原步重试。"""
-
-    def __init__(self, message: str, *, recoverable: bool) -> None:
-        super().__init__(message)
-        self.recoverable = recoverable
-
-
 # 给定附件 id，返回 (mime_type, 原始字节)；由 query_engine 构造并注入请求。
 ImageLoader = Callable[[int], tuple[str, bytes]]
 
@@ -42,6 +34,9 @@ ImageLoader = Callable[[int], tuple[str, bytes]]
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    # 提示词缓存命中的 token 数（厂商 usage 里的 cached_tokens /
+    # prompt_cache_hit_tokens；没有缓存或厂商不报告时为 0）。
+    cached_tokens: int = 0
 
 
 @dataclass
@@ -89,6 +84,7 @@ class ToolUseReady:
 class ModelUsage:
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_tokens: int = 0
 
 
 @dataclass
@@ -132,7 +128,6 @@ __all__ = [
     "ModelThinkingDelta",
     "ModelUsage",
     "Provider",
-    "ProviderError",
     "ThinkingMode",
     "ToolChoice",
     "ToolSchema",

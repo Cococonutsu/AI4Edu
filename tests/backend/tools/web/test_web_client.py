@@ -8,7 +8,8 @@ import httpx
 import pytest
 
 from ai4edu.config import Settings
-from ai4edu.tools.web.client import DeepSeekWebTools, WebToolsError, make_web_tools
+from ai4edu.tools.web.client import DeepSeekWebTools, make_web_tools
+from ai4edu.utils.errors import WebToolsError
 
 pytestmark = pytest.mark.asyncio
 

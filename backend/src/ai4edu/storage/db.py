@@ -36,6 +36,10 @@ def make_engine(db_path: Path, *, busy_timeout: float = _BUSY_TIMEOUT_SECONDS) -
         echo=False,
         future=True,
         connect_args={"timeout": busy_timeout},
+        # 多学生并发时每个请求各占一个连接；SQLite 写串行但读并发，
+        # WAL 下放宽连接池（默认 5+10 对整班同时在线偏小）。
+        pool_size=10,
+        max_overflow=20,
     )
 
     @event.listens_for(new_engine.sync_engine, "connect")
@@ -61,18 +65,17 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 
 
 async def _migrate_llm_calls(connection: AsyncConnection) -> None:
-    """给已有的 `llm_calls` 表补新列（step、thinking），不重建、不删数据。"""
+    """给已有的 `llm_calls` 表补新列（step、thinking、cached_tokens），不重建、不删数据。"""
 
     rows = await connection.execute(text("PRAGMA table_info(llm_calls)"))
     existing = {str(row[1]) for row in rows}
-    if "step" not in existing:
-        await connection.execute(
-            text("ALTER TABLE llm_calls ADD COLUMN step INTEGER")
-        )
-    if "thinking" not in existing:
-        await connection.execute(
-            text("ALTER TABLE llm_calls ADD COLUMN thinking VARCHAR(8)")
-        )
+    for column, ddl in (
+        ("step", "ALTER TABLE llm_calls ADD COLUMN step INTEGER"),
+        ("thinking", "ALTER TABLE llm_calls ADD COLUMN thinking VARCHAR(8)"),
+        ("cached_tokens", "ALTER TABLE llm_calls ADD COLUMN cached_tokens INTEGER"),
+    ):
+        if column not in existing:
+            await connection.execute(text(ddl))
 
 
 async def init_db() -> None:

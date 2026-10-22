@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from .decision import Decision
 from .diagnosis import Diagnosis, Gap
-from .framework import ConfigError, TutoringConfig
+from .framework import TutoringConfig
+from ai4edu.utils.errors import ConfigError
 from .problem import ProblemModel, Relation, Subtask, relation_order
 from .state import (
     MathStatus,

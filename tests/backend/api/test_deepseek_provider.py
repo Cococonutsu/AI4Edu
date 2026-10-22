@@ -15,10 +15,10 @@ from ai4edu.models.contracts import (
     ModelTextDelta,
     ModelThinkingDelta,
     ModelUsage,
-    ProviderError,
     ToolSchema,
     ToolUseReady,
 )
+from ai4edu.utils.errors import ProviderError
 from ai4edu.models.content import TextBlock
 from ai4edu.models.messages import Message
 from fakes import FakeLLMClient, FakeResponse
@@ -144,6 +144,7 @@ async def test_stream_assembles_reasoning_text_and_tool_arguments():
     assert call.input_error is None
     assert usage_events[0].input_tokens == 13
     assert usage_events[0].output_tokens == 17
+    assert usage_events[0].cached_tokens == 0
     assert isinstance(end, ModelStreamEnd)
     assert end.finish_reason == "tool_calls"
 

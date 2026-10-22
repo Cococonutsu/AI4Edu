@@ -1,7 +1,7 @@
 """系统提示词的唯一组装出口（对齐 cc 的 `builder.py`）。
 
-文字全部在 `sections.py` 的 Python 常量里（回合内短文字在
-`config/prompts/reminders.yaml`）。`build_system_prompt` 按固定顺序拼装
+文字全部是本包的 Python 常量：系统提示词段落
+在 `sections.py`，回合内短文字在 `reminders.py`。`build_system_prompt` 按固定顺序拼装
 具名段落：静态主体（身份、教学方式、意图路由、回复格式、画图与可视化、
 联网查询、读题与拆题、诊断与判据）+ 动态的辅导状态摘要（每一步模型调用前重算）。
 改动任何文字时提升对应版本号并同步更新
@@ -25,15 +25,15 @@ from ai4edu.prompts.sections import (
     render_template,
 )
 from ai4edu.tutoring.framework import (
-    ConfigError,
     GradeBand,
     TutoringConfig,
 )
 from ai4edu.tutoring.problem import ProblemModel
+from ai4edu.utils.errors import ConfigError
 from ai4edu.tutoring.state import TutorState
 
 # 版本号随文字内容变化提升；文字搬进代码不改变内容，版本不变。
-TUTOR_SYSTEM_VERSION = "tutor-2026.10.21-1"
+TUTOR_SYSTEM_VERSION = "tutor-2026.10.21-2"
 
 
 def _grade_band_or_error(cfg: TutoringConfig, grade_band: str) -> GradeBand:

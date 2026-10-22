@@ -40,6 +40,7 @@ from ai4edu.core.query_loop import (
 )
 from ai4edu.hooks.guard import TurnGuard
 from ai4edu.hooks.tutoring_hooks import TutoringHooks
+from ai4edu.utils.errors import ProviderError, QueryEngineError
 from ai4edu.models.contracts import (
     ImageLoader,
     ModelEvent,
@@ -71,10 +72,6 @@ SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 _MAX_ATTACHMENTS = 4
 # 读题那一步要输出思考 + 完整题目模型（参考解法、关系、子任务），8192 会被截断。
 TUTOR_MAX_TOKENS = 16384
-
-
-class QueryEngineError(Exception):
-    """请求不合法（会话或附件不属于当前学生等）。"""
 
 
 def _build_image_loader(
@@ -355,7 +352,7 @@ class QueryEngine:
                 system=system,
                 messages=prepare_messages(step_request.messages),
                 tools=step_request.tools,
-                max_tokens=TUTOR_MAX_TOKENS,
+                max_tokens=step_request.max_tokens or TUTOR_MAX_TOKENS,
                 thinking=step_request.thinking,
                 tool_choice=step_request.tool_choice,
                 reasoning_turn_id=turn_id,
@@ -385,6 +382,7 @@ class QueryEngine:
                 prompt_version=TUTOR_SYSTEM_VERSION,
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
+                cached_tokens=usage.cached_tokens,
                 step=step_request.step,
                 thinking=step_request.thinking,
                 latency_ms=int((time.perf_counter() - started) * 1000),

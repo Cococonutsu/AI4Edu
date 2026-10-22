@@ -17,6 +17,7 @@ from typing import Any, Protocol
 import httpx
 
 from ai4edu.config import Settings
+from ai4edu.utils.errors import WebToolsError
 
 # 限流、超时与服务端错误可以稍后重试；其余 4xx 是请求本身的问题。
 _RECOVERABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
@@ -50,19 +51,6 @@ class WebFetchPage:
 
     title: str
     content: str
-
-
-class WebToolsError(Exception):
-    """联网工具调用失败。
-
-    `recoverable` 表示同类请求稍后重试是否可能成功（限流、超时、服务端
-    5xx 为真；余额不足、参数错误等为假）。工具层不自动重试，把原因原样
-    回给模型。
-    """
-
-    def __init__(self, message: str, *, recoverable: bool) -> None:
-        super().__init__(message)
-        self.recoverable = recoverable
 
 
 class WebTools(Protocol):
@@ -126,6 +114,8 @@ class DeepSeekWebTools:
         self._timeout_fetch = timeout_fetch
         # 测试注入 httpx.MockTransport；生产环境为 None，使用默认传输。
         self._transport = transport
+        # 持久客户端：连接与 TLS 握手跨调用复用（引擎持本实例整个进程）。
+        self._http: httpx.AsyncClient | None = None
 
     async def search(self, query: str, *, count: int = 5) -> list[WebSearchHit]:
         data = await self._post(
@@ -164,17 +154,26 @@ class DeepSeekWebTools:
             content=str(data.get("content") or ""),
         )
 
+    def _client(self) -> httpx.AsyncClient:
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                transport=self._transport,
+            )
+        return self._http
+
+    async def aclose(self) -> None:
+        """释放持久连接。引擎持本实例整个进程，通常无需显式关闭。"""
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
+
     async def _post(
         self, url: str, payload: dict[str, Any], *, timeout: float
     ) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                timeout=timeout,
-                transport=self._transport,
-            ) as client:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
+            response = await self._client().post(url, json=payload, timeout=timeout)
+            response.raise_for_status()
         except httpx.TimeoutException as exc:
             raise WebToolsError(
                 f"网络错误：请求超时（{exc}）", recoverable=True

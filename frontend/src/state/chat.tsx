@@ -24,6 +24,7 @@ import { pendingReplyStart } from '../utils/pendingReply';
 import { waitKind, type WaitKind } from '../utils/waiting';
 
 export interface ToolDisplayStatus {
+  tool: string;
   label: string;
   state: ToolState;
 }
@@ -766,6 +767,7 @@ export function ChatProvider({ children }: { children: ReactNode }): JSX.Element
               conversationId,
               messageId: assistantId,
               status: {
+                tool: event.tool,
                 label: event.label,
                 state: event.state,
               },

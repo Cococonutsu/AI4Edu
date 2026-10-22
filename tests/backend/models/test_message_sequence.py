@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from ai4edu.utils.errors import MessageSequenceError
 from ai4edu.models.content import (
     ImageBlock,
     TextBlock,
@@ -17,7 +18,6 @@ from ai4edu.models.content import (
 )
 from ai4edu.models.messages import (
     Message,
-    MessageSequenceError,
     normalize_messages,
     prepare_messages,
     validate_messages,

@@ -7,7 +7,6 @@
   `core/query_engine.py`（经 `client.py` 创建 Provider）可以导入它，
   其余模块只使用 `models/contracts` 里的契约类型；
 - `models/` 不导入 `ai4edu` 的其他子包；
-- 只有 `prompts/` 读取 `config/prompts/` 的模板文件；
 - 只有 `session/`、`auth/`、`server/routes/`、`cli/` 与 `storage/` 自身
   可以调用 `storage/repos`。
 """
@@ -111,21 +110,15 @@ def test_only_query_engine_imports_api():
 def test_models_imports_no_other_subpackage():
     for path in (SRC / "models").glob("*.py"):
         for module in _imports_of(path):
-            assert module.startswith("ai4edu.models") or not module.startswith("ai4edu"), (
+            allowed = (
+                module.startswith("ai4edu.models")
+                # utils/ 是零依赖的最底层公共定义包（异常树），等同项目内标准库。
+                or module.startswith("ai4edu.utils")
+                or not module.startswith("ai4edu")
+            )
+            assert allowed, (
                 f"{path.relative_to(SRC)} 导入了 {module}；"
                 "models/ 不导入 ai4edu 的其他子包"
-            )
-
-
-def test_only_prompts_reads_prompt_templates():
-    template_names = ("reminders.yaml",)
-    for path in _python_files():
-        if (path.parent.relative_to(SRC)).parts[0:1] == ("prompts",):
-            continue
-        for constant in _string_constants(path):
-            assert constant not in template_names, (
-                f"{path.relative_to(SRC)} 引用了提示词模板 {constant}；"
-                "只有 prompts/ 可以读取 config/prompts/"
             )
 
 

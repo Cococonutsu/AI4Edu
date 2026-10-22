@@ -10,7 +10,7 @@ from ai4edu.api.glm import GLMProvider
 from ai4edu.config import Settings
 from ai4edu.core.events import AgentError, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
-from ai4edu.prompts import load_reminders
+from ai4edu.prompts import Reminders
 from ai4edu.storage.repos import attachments as attachments_repo
 from ai4edu.tutoring.framework import load_config
 from fakes import FakeLLMClient, FakeResponse
@@ -76,7 +76,7 @@ async def test_image_uploaded_before_conversation_loads_on_later_turns(
     engine = QueryEngine(
         settings=settings,
         config=load_config(CONFIG_DIR),
-        reminders=load_reminders(CONFIG_DIR),
+        reminders=Reminders(),
         provider=GLMProvider(client),
         session_factory=session_factory,
     )

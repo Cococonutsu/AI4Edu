@@ -3,6 +3,7 @@
 本包不导入 `ai4edu` 的其他子包。
 """
 
+from ai4edu.utils.errors import MessageSequenceError
 from ai4edu.models.content import (
     Block,
     ImageBlock,
@@ -19,7 +20,6 @@ from ai4edu.models.content import (
 from ai4edu.models.messages import (
     MISSING_TOOL_RESULT,
     Message,
-    MessageSequenceError,
     normalize_messages,
     prepare_messages,
     validate_messages,

@@ -39,6 +39,8 @@ async def login(
         )
 
     settings = get_settings()
+    # 顺带清理过期会话：登录是低频操作，借此避免 auth_sessions 无限堆积。
+    await sessions.delete_expired(session)
     token = await sessions.create(session, user.id, settings.session_ttl_hours)
     response.set_cookie(
         key=sessions.COOKIE_NAME,

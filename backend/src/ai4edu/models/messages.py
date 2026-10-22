@@ -26,16 +26,14 @@ from ai4edu.models.content import (
     blocks_to_json,
 )
 
+from ai4edu.utils.errors import MessageSequenceError
+
 logger = logging.getLogger(__name__)
 
 MISSING_TOOL_RESULT = "工具未执行（回合被中断）"
 
 Role = Literal["user", "assistant", "tool"]
 _ROLES = frozenset({"user", "assistant", "tool"})
-
-
-class MessageSequenceError(Exception):
-    """消息序列不符合接口要求，且无法在规范化阶段修复。"""
 
 
 @dataclass

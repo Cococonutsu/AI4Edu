@@ -207,6 +207,8 @@ class LLMCall(Base):
     prompt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 提示词缓存命中的 input token 数（厂商报告时记录，用于观察缓存收益）。
+    cached_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 回合内第几步（1 起）；旧数据中工具内部的调用（analyzer）为 NULL。
     step: Mapped[int | None] = mapped_column(Integer, nullable=True)

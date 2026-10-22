@@ -12,6 +12,7 @@ from typing import Any, TypeVar
 
 import yaml
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from ai4edu.utils.errors import ConfigError
 
 # 领域模板只允许出现在这三个学段。
 GRADE_BAND_NAMES: tuple[str, ...] = ("primary", "junior", "senior")
@@ -35,10 +36,6 @@ def grade_band_for(grade: int) -> str:
 
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
-
-
-class ConfigError(Exception):
-    """配置缺失、格式错误或前后矛盾。信息中应指出文件与键。"""
 
 
 class SoloLevelDef(BaseModel):
