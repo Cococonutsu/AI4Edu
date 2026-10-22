@@ -21,9 +21,10 @@ from ai4edu.auth.deps import current_user
 from ai4edu.config import get_settings
 from ai4edu.core.events import AgentError, AgentEvent, TurnFinished
 from ai4edu.core.query_engine import QueryEngine
+from ai4edu.models.contracts import StudentProfile
 from ai4edu.prompts import Reminders
 from ai4edu.server.streaming import event_to_json, runs
-from ai4edu.storage.db import get_session
+from ai4edu.storage.db import async_session, get_session
 from ai4edu.storage.models import User
 from ai4edu.storage.repos import attachments, conversations
 from ai4edu.tutoring.framework import load_config
@@ -55,7 +56,25 @@ def get_engine() -> QueryEngine:
     settings = get_settings()
     config = load_config(settings.config_dir)
     reminders = Reminders()
-    return QueryEngine(settings=settings, config=config, reminders=reminders)
+    # 组合根：显式装配数据库会话工厂；core 不再默认触及 storage。
+    return QueryEngine(
+        settings=settings,
+        config=config,
+        reminders=reminders,
+        session_factory=async_session,
+    )
+
+
+def _profile(user: User) -> StudentProfile:
+    """ORM User → 领域视图（防腐层），core/tools 不持有 ORM 实体。"""
+    return StudentProfile(
+        id=user.id,
+        username=user.username,
+        display_name=user.display_name,
+        grade=user.grade,
+        grade_band=user.grade_band,
+        role=user.role,
+    )
 
 
 async def _validate_conversation(
@@ -108,7 +127,7 @@ async def _produce_events(
 
     try:
         async for event in engine.run_turn(
-            user=user,
+            user=_profile(user),
             conversation_id=conversation_id,
             text=text,
             attachment_ids=attachment_ids,

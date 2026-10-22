@@ -78,6 +78,7 @@ class AnalyzeProblemTool(BaseTool):
         "系统据此开始辅导。返回后用一句话复述题目要求，然后围绕当前子任务提出第一个问题。"
     )
     running_label = "正在读题…"
+    establishes = ("analyzed",)
     input_schema: dict[str, Any] = problem_input_schema()
 
     def is_concurrency_safe(self, input: dict[str, Any]) -> bool:

@@ -3,7 +3,8 @@
 对齐 cc 的做法：注册表是**运行时组装的对象**（`ToolRegistry`），由引擎统一
 装配（`build_registry`），测试可注入子集；"哪些工具在当前条件下可用"
 （会话阶段 + 本回合已成功的工具）全部收敛到这里。工具名只出现在本模块、
-工具自身文件与提示词里，hooks 与循环不写工具名。
+工具自身文件与提示词里；hooks 经工具自声明的 `establishes`/`unavailable_after`
+推进回合状态，不写具体工具名。
 """
 
 from __future__ import annotations
@@ -67,9 +68,6 @@ class ToolRegistry:
     def get(self, name: str) -> BaseTool | None:
         """按名字查找；查不到返回 None，由调用方转成给模型的错误结果。"""
         return self._tools.get(name)
-
-    def all_tools(self) -> list[BaseTool]:
-        return list(self._tools.values())
 
     def available_for(
         self, phase: Phase | str, *, succeeded: Iterable[str] = ()

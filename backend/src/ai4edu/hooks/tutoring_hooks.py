@@ -71,9 +71,7 @@ class TutoringHooks:
         self._reminders = reminders
         self._registry = registry
         self._succeeded: set[str] = set()
-        self._diagnosed = False
-        self._analyzed = False
-        self._drew_figure = False
+        self._established: set[str] = set()
         self._last_tool_error = False
 
     def before_step(self, step: int) -> StepPlan:
@@ -83,9 +81,9 @@ class TutoringHooks:
         thinking, tool_choice = choose_step_mode(
             TurnFacts(
                 step=step,
-                has_diagnosis=self._diagnosed,
-                has_analyze=self._analyzed,
-                has_figure=self._drew_figure,
+                has_diagnosis="diagnosed" in self._established,
+                has_analyze="analyzed" in self._established,
+                has_figure="figure" in self._established,
                 last_step_tool_error=self._last_tool_error,
             )
         )
@@ -109,12 +107,9 @@ class TutoringHooks:
         self._last_tool_error = is_error
         if not is_error:
             self._succeeded.add(name)
-            if name == "analyze_problem":
-                self._analyzed = True
-            elif name == "draw_figure":
-                self._drew_figure = True
-            elif name == "record_diagnosis":
-                self._diagnosed = True
+            tool = self._registry.get(name)
+            if tool is not None:
+                self._established.update(tool.establishes)
         return False
 
     def after_step(self, *, has_tool_calls: bool, sent_text: bool) -> StepDecision:

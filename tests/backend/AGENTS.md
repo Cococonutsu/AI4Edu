@@ -20,7 +20,7 @@
 | `prompts/golden/` | 冻结的提示词输出基线；改 `prompts/sections.py` 文字时必须同步更新并提版本 |
 | `tools/test_figure.py` | 图形描述校验：未知名称、不存在的点引用、算式字符白名单；下发数据与给模型的文字分开 |
 | `tools/test_analyze_problem.py` | 学段来自账号、参数 schema 不含学段、不调用模型并进入辅导、题目模型不合格时返回具体原因 |
-| `tools/test_base.py` | 模型调用日志并发写串行 |
+| `session/test_store_llm_log.py` | `TurnStore.log_llm_call` 并发写串行（锁属会话组件） |
 | `server/test_app.py` | 启动时缺少 LLM_API_KEY 的日志 |
 | `server/test_isolation.py` | 跨学生隔离：会话详情/改名/删除/发消息/停止/下载附件/挂附件到他人会话一律 404，会话列表互不可见 |
 | `server/test_auth.py` | `PATCH /auth/me`：改名/改年级与学段推导、只改一项、空名/超长/年级越界或非整数 422 且资料未变、未知字段拒绝、未登录 401、改后重新登录可见 |

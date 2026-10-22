@@ -9,7 +9,7 @@
 | 文件 | 内容 |
 |---|---|
 | `__init__.py` | 包标记 |
-| `base.py` | `BaseTool`（`execute` 异步、`is_concurrency_safe` 并发安全声明——只读默认 True、写状态工具覆写 False，预留并行编排）、`ToolResult`（`content` 为 `ToolResultContent`）、`ToolContext`（`store` 持久化、`persist_state`、模型调用日志带 step/thinking、`web` 联网工具客户端；工具不调用模型） |
+| `base.py` | `BaseTool`（`execute` 异步、`is_concurrency_safe` 并发安全声明）、`ToolResult`（`content` 为 `ToolResultContent`）、`ToolContext`：工具真正需要的最小上下文——`store` 持久化与 `persist_state`、`config`/`reminders`、`user`（StudentProfile 领域视图，不持 ORM）、会话标识、`state`/`problem`、`web`；模型调用日志在 `TurnStore`（session 组件），不在工具上下文 |
 | `registry.py` | `ToolRegistry`（运行时对象，对齐 cc）：`register`（重名报错）、`get`、`available_for(phase, succeeded)`（阶段过滤 + 工具用 `unavailable_after` 声明的回合内冲突）、`to_tool_schemas`；`build_registry()` 默认工具集，由 query_engine 装配、测试可注入子集 |
 | `analyze_problem.py` | 接收老师按"读题与拆题"拆好的题目模型（工具参数），校验、存库、初始化辅导状态；不调用模型，学段由账号填写 |
 | `figure.py` | `draw_figure`：校验结构化图形描述（字段、数量、算式字符与名称白名单），把图作为 `ToolResult.display` 下发给浏览器；不执行模型给的代码 |

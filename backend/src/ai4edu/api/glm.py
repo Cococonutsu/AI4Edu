@@ -10,11 +10,11 @@ GLM 特有事实：思考开关 `thinking` 放在 `extra_body`（`thinking="off"
 
 from __future__ import annotations
 
-from ai4edu.api.openai_compat import OpenAICompatProvider, image_data_url
+from ai4edu.api.openai_compat import OpenAICompatProvider
 
 
 class GLMProvider(OpenAICompatProvider):
     name = "glm"
 
 
-__all__ = ["GLMProvider", "image_data_url"]
+__all__ = ["GLMProvider"]

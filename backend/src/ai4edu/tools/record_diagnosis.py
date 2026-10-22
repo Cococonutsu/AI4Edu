@@ -102,6 +102,7 @@ class RecordDiagnosisTool(BaseTool):
     # 本回合刚分析完新题时，学生还没有针对子任务作答，不能诊断；
     # 由 registry.available_for 依据本声明把本工具从列表里剔除。
     unavailable_after = ("analyze_problem",)
+    establishes = ("diagnosed",)
 
     def is_concurrency_safe(self, input: dict[str, Any]) -> bool:
         # 写证据记录并推进辅导状态，并行执行时会互相覆盖；将来引入并行

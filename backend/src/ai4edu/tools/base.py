@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from ai4edu.config import Settings
-from ai4edu.models.contracts import Provider
+from ai4edu.models.contracts import StudentProfile
 from ai4edu.models.content import ToolResultContent
 from ai4edu.prompts import Reminders
 from ai4edu.session.store import TurnStore
-from ai4edu.storage.models import User
 from ai4edu.tools.web.client import WebTools
 from ai4edu.tutoring.framework import TutoringConfig
 from ai4edu.tutoring.problem import ProblemModel
@@ -44,11 +41,9 @@ class ToolContext:
     """
 
     store: TurnStore
-    settings: Settings
     config: TutoringConfig
     reminders: Reminders
-    provider: Provider
-    user: User
+    user: StudentProfile
     conversation_id: int
     turn_id: str
     student_text: str
@@ -58,38 +53,9 @@ class ToolContext:
     problem: ProblemModel | None = None
 
     last_assistant_message_id: int | None = None
-    _db_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     web: WebTools | None = None
 
-    async def log_llm_call(
-        self,
-        *,
-        purpose: str,
-        model: str,
-        prompt_version: str | None = None,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-        cached_tokens: int | None = None,
-        latency_ms: int | None = None,
-        step: int | None = None,
-        thinking: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        # 同一回合内可能有并发的模型调用共用一个数据库会话；写库需串行。
-        async with self._db_lock:
-            await self.store.log_llm_call(
-                purpose=purpose,
-                model=model,
-                prompt_version=prompt_version,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cached_tokens=cached_tokens,
-                latency_ms=latency_ms,
-                step=step,
-                thinking=thinking,
-                error=error,
-            )
-            await self.store.commit()
+
 
     async def persist_state(self, state: TutorState) -> None:
         """工具修改状态后立即写库，下一步系统提示词就能看到新状态。"""
@@ -97,7 +63,6 @@ class ToolContext:
         self.state = state
         await self.store.update_state(state.phase.value, state.to_json())
         await self.store.commit()
-
 
 class BaseTool(ABC):
     """所有工具的基类。"""
@@ -110,6 +75,9 @@ class BaseTool(ABC):
     # `registry.available_for` 统一执行）。冲突声明写在受影响的工具上，
     # 如 record_diagnosis 声明 unavailable_after=("analyze_problem",)。
     unavailable_after: tuple[str, ...] = ()
+    # 本工具成功后建立的"教学事实"标签（如 "analyzed"/"diagnosed"/"figure"）。
+    # hooks 据此推进回合状态，不写具体工具名。
+    establishes: tuple[str, ...] = ()
 
     @abstractmethod
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:

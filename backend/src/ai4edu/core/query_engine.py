@@ -48,6 +48,7 @@ from ai4edu.models.contracts import (
     ModelUsage,
     Provider,
     ToolSchema,
+    StudentProfile,
     Usage,
 )
 from ai4edu.models.content import ImageBlock, TextBlock, tool_result_text
@@ -56,8 +57,6 @@ from ai4edu.prompts import Reminders
 from ai4edu.prompts.builder import TUTOR_SYSTEM_VERSION, build_system_prompt
 from ai4edu.prompts.reminders import Reminders
 from ai4edu.session.store import TurnStore
-from ai4edu.storage.db import async_session
-from ai4edu.storage.models import User
 from ai4edu.tools.base import ToolContext
 from ai4edu.tools.registry import ToolRegistry, build_registry, to_tool_schemas
 from ai4edu.tools.web.client import WebTools, make_web_tools
@@ -137,11 +136,6 @@ class ToolRunnerAdapter:
         self._reminders = reminders
         self._registry = registry
 
-    def schemas(self) -> list[ToolSchema]:
-        return to_tool_schemas(
-            self._registry.available_for(self._ctx.state.phase)
-        )
-
     def running_label(self, name: str) -> str:
         tool = self._registry.get(name)
         return tool.running_label if tool is not None else name
@@ -199,7 +193,7 @@ class QueryEngine:
         web: WebTools | None = None,
         registry: ToolRegistry | None = None,
         max_steps: int = 8,
-        session_factory: SessionFactory | None = None,
+        session_factory: SessionFactory,
     ) -> None:
         self._settings = settings
         self._config = config
@@ -215,12 +209,12 @@ class QueryEngine:
             )
         self._max_steps = max_steps
         # 测试可注入临时数据库的会话工厂；生产环境使用进程级工厂。
-        self._session_factory = session_factory or async_session
+        self._session_factory = session_factory
 
     async def run_turn(
         self,
         *,
-        user: User,
+        user: StudentProfile,
         conversation_id: int,
         text: str,
         attachment_ids: list[int],
@@ -239,7 +233,7 @@ class QueryEngine:
         self,
         db: AsyncSession,
         *,
-        user: User,
+        user: StudentProfile,
         conversation_id: int,
         text: str,
         attachment_ids: list[int],
@@ -311,10 +305,8 @@ class QueryEngine:
 
         ctx = ToolContext(
             store=store,
-            settings=self._settings,
             config=self._config,
             reminders=self._reminders,
-            provider=self._provider,
             user=user,
             conversation_id=conversation_id,
             turn_id=turn_id,
@@ -366,7 +358,7 @@ class QueryEngine:
                         usage = event
                     yield event
             except Exception as exc:
-                await ctx.log_llm_call(
+                await store.log_llm_call(
                     purpose="tutor",
                     model=request.model,
                     prompt_version=TUTOR_SYSTEM_VERSION,
@@ -376,7 +368,7 @@ class QueryEngine:
                     error=str(exc)[:500],
                 )
                 raise
-            await ctx.log_llm_call(
+            await store.log_llm_call(
                 purpose="tutor",
                 model=request.model,
                 prompt_version=TUTOR_SYSTEM_VERSION,

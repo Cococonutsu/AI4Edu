@@ -89,6 +89,23 @@ def test_only_api_provider_modules_import_openai():
             )
 
 
+def test_core_and_tools_do_not_import_storage():
+    """core 经 session/store 访问数据库；tools 经 ToolContext.store。
+    两者不得直达 storage（组件隔离）。"""
+    for path in _python_files():
+        parts = path.relative_to(SRC).parts
+        if parts[0] not in ("core", "tools"):
+            continue
+        offender = next(
+            (m for m in _imports_of(path) if m.startswith("ai4edu.storage")),
+            None,
+        )
+        assert offender is None, (
+            f"{path.relative_to(SRC)} 导入了 {offender}；"
+            "core/tools 不直达 storage，持久化经 session/store"
+        )
+
+
 def test_only_query_engine_imports_api():
     allowed = {SRC / "core" / "query_engine.py"}
     for path in _python_files():

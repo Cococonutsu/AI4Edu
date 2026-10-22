@@ -71,9 +71,7 @@ class ToolOutcome:
 
 
 class ToolRunner(Protocol):
-    """列出当前可用的工具并执行调用。"""
-
-    def schemas(self) -> list[ToolSchema]: ...
+    """执行工具调用（工具列表由 hooks.before_step 提供，唯一出口）。"""
 
     def running_label(self, name: str) -> str: ...
 

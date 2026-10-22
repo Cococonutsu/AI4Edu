@@ -109,6 +109,22 @@ class ModelResponse:
     raw: str = ""
 
 
+@dataclass(frozen=True)
+class StudentProfile:
+    """学生身份的领域视图（防腐层）。
+
+    引擎与工具只认这些字段，不持有 ORM 实体；由 server 从 `User` 转换，
+    使 core/tools 不依赖 storage。
+    """
+
+    id: int
+    username: str
+    display_name: str
+    grade: int
+    grade_band: str
+    role: str
+
+
 @runtime_checkable
 class Provider(Protocol):
     name: str
@@ -128,6 +144,7 @@ __all__ = [
     "ModelThinkingDelta",
     "ModelUsage",
     "Provider",
+    "StudentProfile",
     "ThinkingMode",
     "ToolChoice",
     "ToolSchema",

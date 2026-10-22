@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai4edu.models.messages import Message
@@ -40,6 +42,8 @@ class TurnStore:
         self._db = db
         self.user_id = user_id
         self.conversation_id = conversation_id
+        # 同一回合内若出现并发调用，模型日志的写库在此串行（原 ToolContext 锁移入）。
+        self._llm_log_lock = asyncio.Lock()
 
     async def commit(self) -> None:
         await self._db.commit()
@@ -159,20 +163,22 @@ class TurnStore:
         thinking: str | None = None,
         error: str | None = None,
     ) -> None:
-        await llm_calls_repo.add(
-            self._db,
-            conversation_id=self.conversation_id,
-            purpose=purpose,
-            model=model,
-            prompt_version=prompt_version,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cached_tokens=cached_tokens,
-            latency_ms=latency_ms,
-            step=step,
-            thinking=thinking,
-            error=error,
-        )
+        async with self._llm_log_lock:
+            await llm_calls_repo.add(
+                self._db,
+                conversation_id=self.conversation_id,
+                purpose=purpose,
+                model=model,
+                prompt_version=prompt_version,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+                latency_ms=latency_ms,
+                step=step,
+                thinking=thinking,
+                error=error,
+            )
+            await self._db.commit()
 
 
 __all__ = ["TurnStore"]

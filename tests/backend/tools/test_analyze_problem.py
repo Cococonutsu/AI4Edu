@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ai4edu.api.glm import GLMProvider
-from ai4edu.config import Settings
+from ai4edu.models.contracts import StudentProfile
 from ai4edu.prompts import Reminders
 from ai4edu.session.store import TurnStore
 from ai4edu.storage.repos import problems
@@ -61,11 +60,16 @@ async def _context(seed, db_session, tmp_path):
     client = FakeLLMClient([])
     ctx = ToolContext(
         store=TurnStore(db_session, user_id=user.id, conversation_id=conversation_id),
-        settings=Settings(data_dir=tmp_path / "data", config_dir=CONFIG_DIR),
         config=load_config(CONFIG_DIR),
         reminders=Reminders(),
-        provider=GLMProvider(client),
-        user=user,
+        user=StudentProfile(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            grade=user.grade,
+            grade_band=user.grade_band,
+            role=user.role,
+        ),
         conversation_id=conversation_id,
         turn_id="turn-1",
         student_text="如图，求 k 的值。",

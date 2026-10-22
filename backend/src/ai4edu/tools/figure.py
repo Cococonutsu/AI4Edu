@@ -467,6 +467,7 @@ class DrawFigureTool(BaseTool):
         "调用后只用一两句话说明该看什么，不要复述图中的数值。"
     )
     running_label = "正在画图…"
+    establishes = ("figure",)
     input_schema: dict[str, Any] = figure_input_schema()
 
     async def execute(self, input: dict[str, Any], ctx: ToolContext) -> ToolResult:

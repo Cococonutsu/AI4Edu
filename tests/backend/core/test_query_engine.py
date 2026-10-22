@@ -620,11 +620,14 @@ async def test_missing_api_key_logged_when_engine_is_built(
         deepseek_api_key="",
     )
 
+    from ai4edu.storage.db import async_session
+
     QueryEngine(
         settings=settings,
         config=config,
         reminders=reminders,
         provider=FakeProvider([]),
+        session_factory=async_session,
     )
 
     assert "未配置 LLM_API_KEY" in caplog.text

@@ -23,7 +23,7 @@ def test_duplicate_registration_raises():
 def test_build_registry_contains_all_tools():
     registry = build_registry()
 
-    assert sorted(tool.name for tool in registry.all_tools()) == [
+    assert sorted(tool.name for tool in registry._tools.values()) == [
         "analyze_problem",
         "draw_figure",
         "record_diagnosis",
